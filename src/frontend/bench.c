@@ -11,6 +11,7 @@
 #include <string.h>
 #include "platform/platform.h"
 #include "cpu/z80/z80.h"
+#include "cpu/ez80/ez80.h"
 #ifdef N84_NSPIRE
 #include <os.h>
 #include <libndls.h>
@@ -61,6 +62,8 @@ static void out(const char *fmt, ...) {
 static void dummy_write(void *c, uint16_t a, uint8_t v) { (void)c; (void)a; (void)v; }
 static uint8_t dummy_in(void *c, uint16_t p) { (void)c; (void)p; return 0xff; }
 static void dummy_out(void *c, uint16_t p, uint8_t v) { (void)c; (void)p; (void)v; }
+static uint8_t ez_rslow(void *c, uint32_t a) { (void)c; (void)a; return 0xff; }
+static void ez_wslow(void *c, uint32_t a, uint8_t v) { (void)c; (void)a; (void)v; }
 
 int main(int argc, char **argv) {
     if (!plat_init(argc, argv)) return 1;
@@ -120,6 +123,27 @@ int main(int argc, char **argv) {
         unsigned long khz = (unsigned long)(cyc * PLAT_TICKS_PER_SEC / el / 1000u);
         out("Z80: %lu.%02lu MHz equiv (%lu%% of 15MHz)\n", khz / 1000, (khz % 1000) / 10,
             khz / 150);
+    }
+
+    /* 5. eZ80 throughput (same program, Z80 mode), in instructions/s */
+    {
+        static ez80_t e;
+        ez80_init(&e);
+        for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { e.rd[i] = e.wr[i] = NULL; e.cost[i] = 1; }
+        for (unsigned i = 0; i < 16; i++) e.rd[i] = e.wr[i] = mem + i * EZ80_PAGE_SIZE;
+        memcpy(mem, bench_prog, sizeof bench_prog);
+        e.ctx = &e; e.read_slow = ez_rslow; e.write_slow = ez_wslow; e.port_in = dummy_in; e.port_out = dummy_out;
+        uint32_t s0 = plat_ticks(), s1;
+        uint64_t insns = 0;
+        do {
+            for (int i = 0; i < 10000; i++) ez80_step(&e);
+            insns += 10000;
+            s1 = plat_ticks();
+        } while (s1 - s0 < 2 * PLAT_TICKS_PER_SEC && insns < 4000000000ull);
+        if (s1 != s0) {
+            unsigned long kips = (unsigned long)(insns * PLAT_TICKS_PER_SEC / (s1 - s0) / 1000u);
+            out("eZ80: %lu.%02lu MIPS\n", kips / 1000, (kips % 1000) / 10);
+        }
     }
 
     plat_video_shutdown();

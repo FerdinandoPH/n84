@@ -11,7 +11,9 @@ Licencia GPLv3. Especificación en [docs/SPEC.md](docs/SPEC.md); viabilidad en [
 | F1 Núcleo Z80 | ✅ Pasa ZEXDOC y ZEXALL (67/67) |
 | F2 TI-84+ en el host | ✅ Hardware implementado y probado con una ROM sintética. **Falta arrancar el TI-OS real** (no hay ROM todavía) |
 | F3 TI-84+ en la Nspire | Código hecho (`n84.tns`), **sin probar en hardware** |
-| F4–F9 | Pendientes (siguiente: núcleo eZ80) |
+| F4 Ficheros y variantes Z80 | Pendiente |
+| F5 Núcleo eZ80 | ✅ Primera versión: pasa ZEXDOC en modo Z80 (salvo los tests de opcodes que en un eZ80 real provocan trap) y 30 tests propios de ADL, sufijos, MBASE y llamadas mixtas. **Sin optimizar** y pendiente de compararlo con CEmu |
+| F6–F9 | Pendientes (siguiente: máquina TI-84 Plus CE en el host) |
 
 Modelos Z80 soportados: TI-83 Plus SE, TI-84 Plus y TI-84 Plus SE. La TI-83 Plus "básica" (512 KB) se añadirá después.
 
@@ -29,7 +31,8 @@ make nspire          # build/nspire/n84.tns y build/nspire/n84bench.tns
 
 1. **Benchmark de la fase 0:** copia `build/nspire/n84bench.tns` y ejecútalo. Muestra y guarda en
    `n84bench.txt.tns` lo siguiente: tipo de hardware y de LCD, si el timer funciona, si se pueden reservar
-   bloques de 4, 8 y 16 MB, los FPS del `lcd_blit` y la velocidad del núcleo Z80 en MHz equivalentes.
+   bloques de 4, 8 y 16 MB, los FPS del `lcd_blit`, la velocidad del núcleo Z80 en MHz equivalentes
+   y la del eZ80 en MIPS.
    **Pásame ese fichero** (o una foto de la pantalla).
 2. **Emulador:** copia `build/nspire/n84.tns` y ejecútalo una vez para registrar la extensión `.rom`.
    Copia tu volcado de ROM como `NOMBRE.rom.tns` y ábrelo desde Mis Documentos.

@@ -11,6 +11,7 @@ BUILD       := build
 HB          := $(BUILD)/host
 
 CORE_Z80  := src/cpu/z80/z80.c
+CORE_EZ80 := src/cpu/ez80/ez80.c
 TI8X      := src/machine/ti8x/ti8x.c
 PLAT_HOST := src/platform/host/plat_host.c
 VIEW_TI8X := src/frontend/ti8x_view.c
@@ -20,15 +21,23 @@ HDRS      := $(wildcard src/*/*.h src/*/*/*.h)
 
 all: host
 
-host: $(HB)/zextest $(HB)/bench $(HB)/ti8x_test $(HB)/n84-host
+host: $(HB)/zextest $(HB)/ezextest $(HB)/ez80_adl_test $(HB)/bench $(HB)/ti8x_test $(HB)/n84-host
 
 $(HB)/zextest: tests/z80/zextest.c $(CORE_Z80) $(HDRS)
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -o $@ tests/z80/zextest.c $(CORE_Z80)
 
-$(HB)/bench: src/frontend/bench.c $(CORE_Z80) $(PLAT_HOST) $(HDRS)
+$(HB)/ezextest: tests/ez80/ezextest.c $(CORE_EZ80) $(HDRS)
 	@mkdir -p $(dir $@)
-	$(HOST_CC) $(HOST_CFLAGS) -DN84_HOST -o $@ src/frontend/bench.c $(CORE_Z80) $(PLAT_HOST)
+	$(HOST_CC) $(HOST_CFLAGS) -o $@ tests/ez80/ezextest.c $(CORE_EZ80)
+
+$(HB)/ez80_adl_test: tests/ez80/ez80_adl_test.c $(CORE_EZ80) $(HDRS)
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -o $@ tests/ez80/ez80_adl_test.c $(CORE_EZ80)
+
+$(HB)/bench: src/frontend/bench.c $(CORE_Z80) $(CORE_EZ80) $(PLAT_HOST) $(HDRS)
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -DN84_HOST -o $@ $(filter %.c,$^)
 
 $(HB)/ti8x_test: tests/ti8x/ti8x_test.c $(CORE_Z80) $(TI8X) $(VIEW_TI8X) $(PLAT_HOST) $(HDRS)
 	@mkdir -p $(dir $@)
@@ -42,9 +51,15 @@ $(BUILD)/ti84p_test.rom: tools/mk_ti8x_testrom.py
 	@mkdir -p $(dir $@)
 	python3 tools/mk_ti8x_testrom.py $@
 
-test: $(HB)/zextest $(HB)/ti8x_test $(BUILD)/ti84p_test.rom
+# ZEXDOC on the eZ80 skips tests 50, 59, 60: they use DD-prefixed non-index
+# opcodes and SLL, which trap on a real eZ80.
+test: $(HB)/zextest $(HB)/ezextest $(HB)/ez80_adl_test $(HB)/ti8x_test $(BUILD)/ti84p_test.rom
 	$(HB)/zextest tests/z80/zexdoc.com | tee $(BUILD)/zexdoc.log
 	@! grep -q "ERROR" $(BUILD)/zexdoc.log
+	$(HB)/ezextest tests/z80/zexdoc.com 50 59 60 | tee $(BUILD)/ezexdoc.log
+	@! grep -q "ERROR" $(BUILD)/ezexdoc.log
+	@grep -q "Tests complete" $(BUILD)/ezexdoc.log
+	$(HB)/ez80_adl_test
 	$(HB)/ti8x_test $(BUILD)/ti84p_test.rom $(BUILD)/ti8x_test.ppm
 
 test-full: test

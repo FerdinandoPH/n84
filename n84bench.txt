@@ -1,6 +1,7 @@
-timer: 103 ticks over busy loop OK
+timer: 92 ticks over busy loop OK
 malloc  4MB: OK
 malloc  8MB: OK
 malloc 16MB: OK
 lcd_init: OK
-Z80: 1336.41 MHz equiv (8909% of 15MHz)
+Z80: 1431.17 MHz equiv (9541% of 15MHz)
+eZ80: 85.01 MIPS

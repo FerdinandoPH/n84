@@ -22,7 +22,7 @@ N84_SRC    := src/frontend/main.c src/frontend/ti8x_view.c src/frontend/keymap_t
               src/machine/ti8x/ti8x.c $(COMMON_SRC)
 N84_OBJ    := $(patsubst src/%.c,$(BUILD)/%.o,$(N84_SRC))
 
-BENCH_SRC  := src/frontend/bench.c $(COMMON_SRC)
+BENCH_SRC  := src/frontend/bench.c src/cpu/ez80/ez80.c $(COMMON_SRC)
 BENCH_OBJ  := $(patsubst src/%.c,$(BUILD)/%.o,$(BENCH_SRC))
 
 .PHONY: all clean
