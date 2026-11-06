@@ -1,0 +1,9 @@
+build/
+# Never commit TI ROMs / OS images
+roms/
+*.rom
+*.rom.tns
+*.8xu
+*.8eu
+*.sav
+*.sav.tns

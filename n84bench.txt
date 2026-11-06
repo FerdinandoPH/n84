@@ -1,0 +1,6 @@
+timer: 103 ticks over busy loop OK
+malloc  4MB: OK
+malloc  8MB: OK
+malloc 16MB: OK
+lcd_init: OK
+Z80: 1336.41 MHz equiv (8909% of 15MHz)

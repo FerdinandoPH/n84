@@ -1,0 +1,40 @@
+# N84 - Ndless build. Requires the Ndless SDK bin directory in PATH
+# (e.g. export PATH=$HOME/Ndless/ndless-sdk/bin:$PATH).
+#   make -f Makefile.nspire           -> build/nspire/n84bench.tns
+#   make -f Makefile.nspire DEBUG=1   -> -O0 -g builds for gdb
+
+GCC     = nspire-gcc
+LD      = nspire-ld
+GENZEHN = genzehn
+MAKEPRG = make-prg
+
+BUILD   := build/nspire
+CFLAGS  := -std=gnu11 -Wall -Wextra -marm -mcpu=arm926ej-s -Isrc -DN84_NSPIRE
+ifeq ($(DEBUG),1)
+CFLAGS  += -O0 -g
+else
+CFLAGS  += -O2 -fomit-frame-pointer
+endif
+
+COMMON_SRC := src/cpu/z80/z80.c src/platform/nspire/plat_nspire.c
+
+BENCH_SRC  := src/frontend/bench.c $(COMMON_SRC)
+BENCH_OBJ  := $(patsubst src/%.c,$(BUILD)/%.o,$(BENCH_SRC))
+
+.PHONY: all clean
+all: $(BUILD)/n84bench.tns
+
+$(BUILD)/%.o: src/%.c
+	@mkdir -p $(dir $@)
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/n84bench.elf: $(BENCH_OBJ)
+	$(LD) $^ -o $@
+
+$(BUILD)/%.tns: $(BUILD)/%.elf
+	$(GENZEHN) --input $< --output $@.zehn --name "$*" --240x320-support true
+	$(MAKEPRG) $@.zehn $@
+	rm -f $@.zehn
+
+clean:
+	rm -rf $(BUILD)
