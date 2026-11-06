@@ -86,12 +86,16 @@ static void init_tables(void) {
 
 /* ---- memory / IO ---------------------------------------------------- */
 
+#define likely(x)   __builtin_expect(!!(x), 1)
+
 static inline uint8_t rb(z80_t *z, uint16_t a) {
-    return z->rd[a >> Z80_PAGE_SHIFT][a & Z80_PAGE_MASK];
+    const uint8_t *p = z->rd[a >> Z80_PAGE_SHIFT];
+    if (likely(p)) return p[a & Z80_PAGE_MASK];
+    return z->read_slow(z->ctx, a);
 }
 static inline void wb(z80_t *z, uint16_t a, uint8_t v) {
     uint8_t *p = z->wr[a >> Z80_PAGE_SHIFT];
-    if (p) p[a & Z80_PAGE_MASK] = v;
+    if (likely(p)) p[a & Z80_PAGE_MASK] = v;
     else z->write_slow(z->ctx, a, v);
 }
 static inline uint16_t rw(z80_t *z, uint16_t a) {

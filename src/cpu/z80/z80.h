@@ -6,9 +6,9 @@
  * Zilog Z80 interpreter core.
  *
  * Memory is accessed through four 16 KiB page pointers (rd/wr), which matches
- * the banking granularity of every TI Z80 calculator. A NULL write pointer
- * routes the write through write_slow() (used for Flash command emulation and
- * read-only areas). Read pointers must always be valid.
+ * the banking granularity of every TI Z80 calculator. A NULL pointer routes
+ * the access through read_slow()/write_slow() (Flash command emulation,
+ * read-only areas, sub-page remapping).
  *
  * Host requirement: little-endian (x86, ARM as used by Ndless).
  */
@@ -61,6 +61,7 @@ struct z80 {
 
     /* Machine callbacks */
     void *ctx;
+    uint8_t (*read_slow)(void *ctx, uint16_t addr);
     void    (*write_slow)(void *ctx, uint16_t addr, uint8_t val);
     uint8_t (*port_in)(void *ctx, uint16_t port);
     void    (*port_out)(void *ctx, uint16_t port, uint8_t val);
@@ -77,7 +78,8 @@ void     z80_set_irq(z80_t *z, bool level);
 void     z80_nmi(z80_t *z);
 
 static inline uint8_t z80_peek(const z80_t *z, uint16_t a) {
-    return z->rd[a >> Z80_PAGE_SHIFT][a & Z80_PAGE_MASK];
+    const uint8_t *p = z->rd[a >> Z80_PAGE_SHIFT];
+    return p ? p[a & Z80_PAGE_MASK] : z->read_slow(z->ctx, a);
 }
 
 #endif

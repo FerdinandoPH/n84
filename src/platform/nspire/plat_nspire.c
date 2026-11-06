@@ -146,6 +146,18 @@ void plat_msgbox(const char *title, const char *msg) {
     if (was) lcd_init(SCR_320x240_565);
 }
 
+int plat_menu3(const char *title, const char *msg, const char *b1, const char *b2, const char *b3) {
+    bool was = lcd_ready;
+    if (was) lcd_init(SCR_TYPE_INVALID);
+    wait_no_key_pressed();
+    int r = (int)show_msgbox_3b(title, msg, b1, b2, b3);
+    wait_no_key_pressed();
+    if (was) lcd_init(SCR_320x240_565);
+    return r;
+}
+
+void plat_register_ext(const char *ext, const char *prog) { cfg_register_fileext(ext, prog); }
+
 void plat_log(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);

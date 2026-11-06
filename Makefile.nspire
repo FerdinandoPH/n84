@@ -18,17 +18,24 @@ endif
 
 COMMON_SRC := src/cpu/z80/z80.c src/platform/nspire/plat_nspire.c
 
+N84_SRC    := src/frontend/main.c src/frontend/ti8x_view.c src/frontend/keymap_ti8x.c \
+              src/machine/ti8x/ti8x.c $(COMMON_SRC)
+N84_OBJ    := $(patsubst src/%.c,$(BUILD)/%.o,$(N84_SRC))
+
 BENCH_SRC  := src/frontend/bench.c $(COMMON_SRC)
 BENCH_OBJ  := $(patsubst src/%.c,$(BUILD)/%.o,$(BENCH_SRC))
 
 .PHONY: all clean
-all: $(BUILD)/n84bench.tns
+all: $(BUILD)/n84.tns $(BUILD)/n84bench.tns
 
-$(BUILD)/%.o: src/%.c
+$(BUILD)/%.o: src/%.c $(wildcard src/*/*.h src/*/*/*.h)
 	@mkdir -p $(dir $@)
 	$(GCC) $(CFLAGS) -c $< -o $@
 
 $(BUILD)/n84bench.elf: $(BENCH_OBJ)
+	$(LD) $^ -o $@
+
+$(BUILD)/n84.elf: $(N84_OBJ)
 	$(LD) $^ -o $@
 
 $(BUILD)/%.tns: $(BUILD)/%.elf

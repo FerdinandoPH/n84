@@ -49,6 +49,13 @@ void plat_wait_until(uint32_t tick) {
 
 void plat_msgbox(const char *title, const char *msg) { fprintf(stderr, "[%s] %s\n", title, msg); }
 
+int plat_menu3(const char *title, const char *msg, const char *b1, const char *b2, const char *b3) {
+    fprintf(stderr, "[%s] %s (%s/%s/%s) -> 1\n", title, msg, b1, b2, b3);
+    return 1;
+}
+
+void plat_register_ext(const char *ext, const char *prog) { (void)ext; (void)prog; }
+
 void plat_log(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
