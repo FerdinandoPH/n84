@@ -74,5 +74,6 @@ const char *plat_app_dir(void);
 /* Calls cb(name) for each entry of dir (no "." / ".."); stops early when cb
  * returns false. Returns false if the directory cannot be opened. */
 bool     plat_list_dir(const char *dir, bool (*cb)(const char *name, void *ctx), void *ctx);
+bool     plat_is_dir(const char *path);
 
 #endif

@@ -149,10 +149,14 @@ static void about(void) {
 static bool rom_options(rom_entry_t *r) {
     for (;;) {
         bool has_state = r && r->state_size >= 0;
-        const char *items[6];
-        int ids[6], n = 0;
-        enum { O_RUN, O_INFO, O_DELSTATE, O_SETTINGS, O_ABOUT };
-        if (r) { items[n] = "Run"; ids[n++] = O_RUN; items[n] = "Information"; ids[n++] = O_INFO; }
+        const char *items[8];
+        int ids[8], n = 0;
+        enum { O_RUN, O_INFO, O_TRANSFER, O_DELSTATE, O_SETTINGS, O_ABOUT };
+        if (r) {
+            items[n] = "Run"; ids[n++] = O_RUN;
+            items[n] = "Transfer files..."; ids[n++] = O_TRANSFER;
+            items[n] = "Information"; ids[n++] = O_INFO;
+        }
         if (r && has_state) { items[n] = "Delete saved state"; ids[n++] = O_DELSTATE; }
         items[n] = "Settings"; ids[n++] = O_SETTINGS;
         items[n] = "About N84"; ids[n++] = O_ABOUT;
@@ -162,6 +166,13 @@ static bool rom_options(rom_entry_t *r) {
         switch (ids[c]) {
         case O_RUN: return true;
         case O_INFO: show_info(r); break;
+        case O_TRANSFER: {
+            char path[300];
+            full_path(path, sizeof path, r->file);
+            session_transfer(path);
+            refresh_state(r);
+            break;
+        }
         case O_DELSTATE:
             if (ui_confirm("Delete saved state",
                            "The emulated calculator will start fresh: RAM contents are lost, Archive is kept.", NULL)) {

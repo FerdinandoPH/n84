@@ -10,7 +10,7 @@
 
 #define CONFIG_FILE "n84.cfg.tns"
 
-n84_config_t config = { false, -1, "" };
+n84_config_t config = { false, -1, "", "" };
 
 void app_path(char *buf, unsigned size, const char *name) {
     snprintf(buf, size, "%s/%s", plat_app_dir(), name);
@@ -31,6 +31,9 @@ void config_load(void) {
         else if (!strcmp(line, "frameskip")) {
             config.frameskip = atoi(v);
             if (config.frameskip < -1 || config.frameskip > 3) config.frameskip = -1;
+        } else if (!strcmp(line, "last_dir")) {
+            strncpy(config.last_dir, v, sizeof config.last_dir - 1);
+            config.last_dir[sizeof config.last_dir - 1] = 0;
         } else if (!strcmp(line, "last_rom")) {
             strncpy(config.last_rom, v, sizeof config.last_rom - 1);
             config.last_rom[sizeof config.last_rom - 1] = 0;
@@ -44,6 +47,7 @@ void config_save(void) {
     app_path(path, sizeof path, CONFIG_FILE);
     FILE *f = plat_fopen(path, "w");
     if (!f) return;
-    fprintf(f, "show_fps=%d\nframeskip=%d\nlast_rom=%s\n", config.show_fps, config.frameskip, config.last_rom);
+    fprintf(f, "show_fps=%d\nframeskip=%d\nlast_rom=%s\nlast_dir=%s\n", config.show_fps, config.frameskip,
+            config.last_rom, config.last_dir);
     fclose(f);
 }

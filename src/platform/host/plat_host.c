@@ -103,6 +103,13 @@ long plat_file_size(const char *path) {
     return n;
 }
 
+bool plat_is_dir(const char *path) {
+    DIR *d = opendir(path);
+    if (!d) return false;
+    closedir(d);
+    return true;
+}
+
 bool plat_list_dir(const char *dir, bool (*cb)(const char *name, void *ctx), void *ctx) {
     DIR *d = opendir(dir);
     if (!d) return false;

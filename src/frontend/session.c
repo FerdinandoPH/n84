@@ -13,6 +13,10 @@
 #include "platform/platform.h"
 #include "machine/ti8x/ti8x.h"
 #include "machine/ce/ce.h"
+#include "machine/ce/ce_link.h"
+#include "machine/ti8x/ti8x_link.h"
+#include "link/tivar.h"
+#include "frontend/browser.h"
 
 #define FRAME_HZ 60u
 
@@ -31,6 +35,7 @@ typedef struct {
     bool (*flash_changed)(void);
     bool (*flush_flash)(FILE *rom_file);
     void (*shutdown)(void);
+    const char *(*send_var)(const tivar_t *v);
 } machine_t;
 
 /* --- TI-83 Plus SE / TI-84 Plus / TI-84 Plus SE --- */
@@ -53,10 +58,11 @@ static bool ti8x_load(FILE *f) { return ti8x_load_state(&ti8x, f); }
 static bool ti8x_flash_changed(void) { return ti8x.flash_dirty; }
 static bool ti8x_flush(FILE *f) { return ti8x_flush_flash(&ti8x, f); }
 static void ti8x_shutdown(void) { ti8x_free(&ti8x); }
+static const char *ti8x_send(const tivar_t *v) { return ti8x_send_var(&ti8x, v); }
 
 static const machine_t ti8x_machine = {
     NULL, ti8x_frame, ti8x_draw_fb, ti8x_release, ti8x_do_reset, ti8x_save, ti8x_load,
-    ti8x_flash_changed, ti8x_flush, ti8x_shutdown,
+    ti8x_flash_changed, ti8x_flush, ti8x_shutdown, ti8x_send,
 };
 
 /* --- TI-84 Plus CE --- */
@@ -88,7 +94,7 @@ static bool ce_flush(FILE *f) {
 
 static const machine_t ce_machine = {
     "TI-84 Plus CE", ce_frame, ce_draw_fb, ce_release, ce_reset, ce_save_state, ce_load_state,
-    ce_flash_changed, ce_flush, ce_free,
+    ce_flash_changed, ce_flush, ce_free, ce_send_var,
 };
 
 /* ----------------------------------------------------------------------
@@ -152,10 +158,55 @@ static void draw_fps(uint16_t *fb, unsigned fps, unsigned speed) {
 }
 
 /* ----------------------------------------------------------------------
+ * Sending files
+ * -------------------------------------------------------------------- */
+
+static void busy_box(const char *text) {
+    int w = ui_text_width(text) + 24;
+    ui_rect((UI_W - w) / 2, 104, w, 32, UI_PANEL);
+    ui_frame((UI_W - w) / 2, 104, w, 32, UI_BAR);
+    ui_text((UI_W - w) / 2 + 12, 113, text, UI_FG);
+    ui_present();
+}
+
+/* Sends every variable in `path` to the running machine and reports. */
+static void send_file(const machine_t *m, const char *path, const uint16_t *backdrop) {
+    static uint16_t bg[UI_W * UI_H];
+    if (backdrop) memcpy(bg, backdrop, sizeof bg);
+    else { ui_clear(UI_BG); memcpy(bg, plat_video_buffer(), sizeof bg); }
+
+    tivar_file_t f;
+    const char *err = tivar_load(path, &f);
+    char msg[160];
+    if (err) {
+        snprintf(msg, sizeof msg, "Could not read the file: %s.", err);
+        ui_message("Send file", msg, bg);
+        return;
+    }
+    int ok = 0, total = f.count;
+    char failed[96] = "";
+    for (int i = 0; i < f.count; i++) {
+        char what[48], line[64];
+        tivar_describe(&f.vars[i], what, sizeof what);
+        memcpy(plat_video_buffer(), bg, sizeof bg);
+        ui_dim(plat_video_buffer());
+        snprintf(line, sizeof line, "Sending %s...", what);
+        busy_box(line);
+        const char *e = m->send_var(&f.vars[i]);
+        if (e) { snprintf(failed, sizeof failed, "%s: %s.", what, e); break; }
+        ok++;
+    }
+    tivar_free(&f);
+    if (!failed[0]) snprintf(msg, sizeof msg, "Sent %d variable%s.", ok, ok == 1 ? "" : "s");
+    else snprintf(msg, sizeof msg, "Sent %d of %d. %s", ok, total, failed);
+    ui_message("Send file", msg, bg);
+}
+
+/* ----------------------------------------------------------------------
  * In-game menu
  * -------------------------------------------------------------------- */
 
-enum { M_RESUME, M_SAVE, M_LOAD, M_RESET, M_TURBO, M_FPS, M_LAUNCHER, M_QUIT, M_COUNT };
+enum { M_RESUME, M_SEND, M_SAVE, M_LOAD, M_RESET, M_TURBO, M_FPS, M_LAUNCHER, M_QUIT, M_COUNT };
 
 typedef enum { ACT_RESUME, ACT_LAUNCHER, ACT_QUIT } menu_act_t;
 
@@ -166,7 +217,7 @@ static menu_act_t ingame_menu(const machine_t *m, const char *state_path, bool *
     int sel = 0;
     for (;;) {
         const char *items[M_COUNT] = {
-            "Resume", "Save state", "Load state", "Reset calculator",
+            "Resume", "Send file...", "Save state", "Load state", "Reset calculator",
             *turbo ? "Turbo: on" : "Turbo: off", config.show_fps ? "Show speed: on" : "Show speed: off",
             "Exit to launcher", "Quit N84",
         };
@@ -175,6 +226,14 @@ static menu_act_t ingame_menu(const machine_t *m, const char *state_path, bool *
         if (r >= 0) sel = r;
         switch (r) {
         case -1: case M_RESUME: return ACT_RESUME;
+        case M_SEND: {
+            char path[320];
+            if (browser_pick("Send", path, sizeof path, backdrop)) {
+                send_file(m, path, backdrop);
+                return ACT_RESUME;
+            }
+            break;
+        }
         case M_SAVE:
             ui_message("Save state", save_state_file(m, state_path) ? "State saved." : "Could not write the state file.", backdrop);
             return ACT_RESUME;
@@ -205,17 +264,18 @@ static menu_act_t ingame_menu(const machine_t *m, const char *state_path, bool *
  * Session
  * -------------------------------------------------------------------- */
 
-session_result_t session_run(const char *rom_path) {
+/* Loads the ROM and its saved state. */
+static bool machine_open(const char *rom_path, machine_t *mp, char *state_path, size_t sp_size) {
     size_t rom_size;
     uint8_t *rom = load_file(rom_path, &rom_size);
-    if (!rom) { ui_message("Error", "Could not read the ROM file.", NULL); return SESSION_ERROR; }
+    if (!rom) { ui_message("Error", "Could not read the ROM file.", NULL); return false; }
 
     machine_t m;
     if (rom_size >= 0x400000) {
         m = ce_machine;
         bool ok = ce_init(rom, rom_size);
         free(rom);
-        if (!ok) { ui_message("Error", "Could not start the TI-84 Plus CE (unsupported image or out of memory).", NULL); return SESSION_ERROR; }
+        if (!ok) { ui_message("Error", "Could not start the TI-84 Plus CE (unsupported image or out of memory).", NULL); return false; }
         memset(ce_keys, 0, sizeof ce_keys);
         ce_flash_gen = ce_flash_generation();
     } else {
@@ -223,14 +283,44 @@ session_result_t session_run(const char *rom_path) {
         ti8x_model_t model = ti8x_detect_model(rom, rom_size);
         bool ok = model != TI8X_MODEL_NONE && ti8x_init(&ti8x, model, rom, rom_size);
         free(rom);
-        if (!ok) { ui_message("Error", "Unsupported ROM image (expected a TI-83 Plus SE, TI-84 Plus, TI-84 Plus SE or TI-84 Plus CE dump), or out of memory.", NULL); return SESSION_ERROR; }
+        if (!ok) { ui_message("Error", "Unsupported ROM image (expected a TI-83 Plus SE, TI-84 Plus, TI-84 Plus SE or TI-84 Plus CE dump), or out of memory.", NULL); return false; }
         m.name = ti8x_model_name(model);
     }
-
-    char state_path[300];
-    session_state_path(rom_path, state_path, sizeof state_path);
+    session_state_path(rom_path, state_path, sp_size);
     if (load_state_file(&m, state_path) < 0)
         ui_message("Saved state", "The saved state is incompatible with this version; starting fresh.", NULL);
+    *mp = m;
+    return true;
+}
+
+/* Saves the state, writes Flash back and frees the machine. */
+static void machine_close(const machine_t *m, const char *rom_path, const char *state_path) {
+    ui_clear(UI_BG);
+    ui_text(110, 112, "Saving...", UI_FG);
+    ui_present();
+    bool ok_state = save_state_file(m, state_path);
+    bool ok_flash = flush_flash(m, rom_path);
+    if (!ok_state || !ok_flash)
+        ui_message("Warning", !ok_state ? "Could not write the saved state." :
+                   "Could not write Flash (Archive) changes back to the ROM file.", NULL);
+    m->shutdown();
+}
+
+session_result_t session_transfer(const char *rom_path) {
+    machine_t m;
+    char state_path[300];
+    if (!machine_open(rom_path, &m, state_path, sizeof state_path)) return SESSION_ERROR;
+    char path[320];
+    while (browser_pick("Send", path, sizeof path, NULL))
+        send_file(&m, path, NULL);
+    machine_close(&m, rom_path, state_path);
+    return SESSION_TO_LAUNCHER;
+}
+
+session_result_t session_run(const char *rom_path) {
+    machine_t m;
+    char state_path[300];
+    if (!machine_open(rom_path, &m, state_path, sizeof state_path)) return SESSION_ERROR;
 
     uint16_t *fb = plat_video_buffer();
     ui_clear(UI_RGB(0, 0, 0));
@@ -285,15 +375,6 @@ session_result_t session_run(const char *rom_path) {
         }
     }
 
-    /* leaving: save state and write Flash back */
-    ui_clear(UI_BG);
-    ui_text(110, 112, "Saving...", UI_FG);
-    ui_present();
-    bool ok_state = save_state_file(&m, state_path);
-    bool ok_flash = flush_flash(&m, rom_path);
-    if (!ok_state || !ok_flash)
-        ui_message("Warning", !ok_state ? "Could not write the saved state." :
-                   "Could not write Flash (Archive) changes back to the ROM file.", NULL);
-    m.shutdown();
+    machine_close(&m, rom_path, state_path);
     return act == ACT_QUIT ? SESSION_QUIT : SESSION_TO_LAUNCHER;
 }

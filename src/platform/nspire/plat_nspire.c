@@ -182,6 +182,13 @@ long plat_file_size(const char *path) {
 static char app_dir[256] = ".";
 const char *plat_app_dir(void) { return app_dir; }
 
+bool plat_is_dir(const char *path) {
+    DIR *d = opendir(path);
+    if (!d) return false;
+    closedir(d);
+    return true;
+}
+
 bool plat_list_dir(const char *dir, bool (*cb)(const char *name, void *ctx), void *ctx) {
     DIR *d = opendir(dir);
     if (!d) return false;

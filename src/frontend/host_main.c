@@ -16,10 +16,11 @@
 #include "machine/ti8x/ti8x.h"
 #include "frontend/ti8x_view.h"
 #include "platform/host/plat_host.h"
+#include "machine/ti8x/ti8x_link.h"
 
 #include "frontend/keynames.h"
 
-typedef struct { double t; int key; const char *shot; } event_t;
+typedef struct { double t; int key; const char *shot; const char *send; } event_t;
 
 static uint8_t lookup_key(const char *s) {
     for (size_t i = 0; i < sizeof keynames / sizeof *keynames; i++)
@@ -56,8 +57,10 @@ int main(int argc, char **argv) {
         else if (strchr(argv[i], ':') && nev < 256) {
             char *c = strchr(argv[i], ':');
             ev[nev].t = atof(argv[i]);
+            ev[nev].shot = ev[nev].send = NULL;
             if (!strncmp(c + 1, "shot=", 5)) { ev[nev].shot = c + 6; ev[nev].key = -1; }
-            else { ev[nev].shot = NULL; ev[nev].key = lookup_key(c + 1); }
+            else if (!strncmp(c + 1, "send=", 5)) { ev[nev].send = c + 6; ev[nev].key = -1; }
+            else ev[nev].key = lookup_key(c + 1);
             nev++;
         } else { fprintf(stderr, "bad argument %s\n", argv[i]); return 2; }
     }
@@ -94,6 +97,12 @@ int main(int argc, char **argv) {
                 else if (t >= ev[i].t + 0.1 && t < ev[i].t + 0.11) ti8x_set_key(&m, (uint8_t)ev[i].key, false);
             } else if (ev[i].shot && t >= ev[i].t && t < ev[i].t + 0.01) {
                 screenshot(&m, ev[i].shot);
+            } else if (ev[i].send && t >= ev[i].t && t < ev[i].t + 0.01) {
+                tivar_file_t vf;
+                const char *e = tivar_load(ev[i].send, &vf);
+                for (int k = 0; !e && k < vf.count; k++) e = ti8x_send_var(&m, &vf.vars[k]);
+                fprintf(stderr, "send %s: %s\n", ev[i].send, e ? e : "OK");
+                tivar_free(&vf);
             }
         }
         ti8x_run(&m, step);

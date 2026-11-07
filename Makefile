@@ -9,7 +9,7 @@ HOST_CC     ?= gcc
 HOST_CFLAGS ?= -O2 -g -std=gnu11 -Wall -Wextra -Isrc
 BUILD       := build
 HB          := $(BUILD)/host
-FRONTEND  := src/frontend/main.c src/frontend/session.c src/frontend/launcher.c src/frontend/ui.c \
+FRONTEND  := src/link/tivar.c src/machine/ti8x/ti8x_link.c src/frontend/browser.c src/frontend/main.c src/frontend/session.c src/frontend/launcher.c src/frontend/ui.c \
              src/frontend/config.c src/frontend/keymap_ti8x.c src/frontend/ti8x_view.c
 
 CORE_Z80  := src/cpu/z80/z80.c
@@ -50,11 +50,11 @@ $(HB)/ti8x_test: tests/ti8x/ti8x_test.c $(CORE_Z80) $(TI8X) $(VIEW_TI8X) $(PLAT_
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -o $@ $(filter %.c,$^)
 
-$(HB)/n84-host: src/frontend/host_main.c $(CORE_Z80) $(TI8X) $(VIEW_TI8X) $(PLAT_HOST) $(HDRS)
+$(HB)/n84-host: src/frontend/host_main.c $(CORE_Z80) $(TI8X) src/machine/ti8x/ti8x_link.c src/link/tivar.c $(VIEW_TI8X) $(PLAT_HOST) $(HDRS)
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -DTI8X_LOG=printf -o $@ $(filter %.c,$^)
 
-$(HB)/n84ce-host: src/frontend/ce_host_main.c $(CORE_EZ80) $(CE_SRC) $(PLAT_HOST) $(HDRS)
+$(HB)/n84ce-host: src/frontend/ce_host_main.c $(CORE_EZ80) $(CE_SRC) src/link/tivar.c $(PLAT_HOST) $(HDRS)
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -Isrc/machine/ce -DCE_LOG=printf -o $@ $(filter %.c,$^)
 

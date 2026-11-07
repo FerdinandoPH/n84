@@ -19,6 +19,11 @@ for f in calc graph; do
     [ "$n" -gt 21504 ] || { echo "FAIL: $f screen is blank"; exit 1; }
     echo "$f: $((n - 21504)) dark LCD pixels"
 done
+# send a TI-BASIC program (Disp "HELLO N84") and run it from the PRGM menu
+python3 tools/mk_8xp.py $OUT/hello.8xp HELLO 'DE 2A 48 45 4C 4C 4F 29 4E 38 34 2A'
+$HOST "$ROM" 9 -o $OUT/send.ppm 1:ON 2.5:CLEAR 3:send=$OUT/hello.8xp 4:PRGM 4.5:ENTER 5:ENTER 2>&1 | grep -q "hello.8xp: OK" \
+    || { echo "FAIL: sending a program to the TI-84+"; exit 1; }
+echo "send (TI-84+): OK"
 echo "ROM smoke OK (screenshots in $OUT)"
 
 # TI-84 Plus CE
@@ -32,5 +37,8 @@ if [ -f "$CEROM" ] && [ -x "$CEHOST" ]; then
         [ "$n" -gt 500 ] || { echo "FAIL: $f screen is blank"; exit 1; }
         echo "$f: $n dark pixels"
     done
+    $CEHOST "$CEROM" 13 -o $OUT/ce_send.ppm 5:CLEAR 6:send=$OUT/hello.8xp 7:PRGM 2>&1 >/dev/null | grep -q "hello.8xp: OK" \
+        || { echo "FAIL: sending a program to the CE"; exit 1; }
+    echo "send (CE): OK"
     echo "CE smoke OK"
 fi

@@ -13,6 +13,10 @@ typedef enum { SESSION_TO_LAUNCHER, SESSION_QUIT, SESSION_ERROR } session_result
  * saved to the matching NAME.sav.tns; Flash changes go back into the ROM. */
 session_result_t session_run(const char *rom_path);
 
+/* Starts the ROM without showing it, lets the user pick TI files to send to
+ * it, then saves the state and Flash like session_run. */
+session_result_t session_transfer(const char *rom_path);
+
 /* "dir/name.rom.tns" -> "dir/name.sav.tns" (buf must hold strlen+16) */
 void session_state_path(const char *rom_path, char *buf, size_t size);
 

@@ -48,6 +48,11 @@ make nspire          # build/nspire/n84.tns y build/nspire/n84bench.tns
    - El estado se guarda en `NOMBRE.sav.tns` al salir. Los cambios en la memoria Archive se escriben
      **dentro del propio fichero ROM**, así que guarda una copia del volcado original.
    - Ajustes globales en `n84.cfg.tns`.
+   - **Transferir programas** (`.8xp`, `.8xv`, `.8xg`…, con `.tns` al final, p. ej. `JUEGO.8xp.tns`):
+     desde el lanzador (opciones de la ROM → *Transfer files...*) o desde el menú del juego (*Send file...*),
+     eligiendo el fichero en el explorador. Se respetan los marcados como archivados. Para crear las
+     variables la calculadora emulada pasa un momento por la pantalla MODE y vuelve a la principal
+     (se pierde lo que estuviera a medio escribir). Las aplicaciones Flash (`.8xk`/`.8ek`) aún no.
 
 ### Teclado (por defecto)
 
