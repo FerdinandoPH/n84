@@ -219,9 +219,44 @@ static void detect_flash_unlock(void) {
     control.flashUnlocked |= 1 << 3;
 }
 
+/*
+ * Busy-wait skipping. Programs wait for hardware in tight loops such as
+ * KEYPADC's kb_Scan: "ld (hl),2 / xor a / cp (hl) / jr nz,$-1" on F50000h.
+ * When the same instruction reads the same I/O address again, gets the same
+ * value, and no register changed since the previous read (a few cycles ago),
+ * the loop can only end when a hardware event changes that value, so the
+ * clock jumps (in whole loop iterations) to just before the next scheduler
+ * event. The program sees the same result; the host saves the iterations.
+ */
+static struct {
+    uint32_t addr, pc, regs[8];
+    int32_t cycles;
+    uint8_t value;
+} poll;
+
+static void poll_regs(uint32_t *r) {
+    r[0] = (uint32_t)cpu.z.a << 8 | cpu.z.f;
+    r[1] = cpu.z.bc.w; r[2] = cpu.z.de.w; r[3] = cpu.z.hl.w;
+    r[4] = cpu.z.ix.w; r[5] = cpu.z.iy.w; r[6] = cpu.z.spl; r[7] = cpu.z.sps;
+}
+
+static void poll_check(uint32_t a, uint8_t v) {
+    uint32_t regs[8];
+    poll_regs(regs);
+    int32_t period = cpu.z.cycles - poll.cycles;
+    if (a == poll.addr && cpu.z.pc == poll.pc && v == poll.value && period > 0 && period <= 64
+        && !memcmp(regs, poll.regs, sizeof regs) && !cpu.signals) {
+        int32_t room = (int32_t)sched_event_next_cycle() - cpu.z.cycles - 1;
+        if (room > period) cpu.z.cycles += room / period * period;
+    }
+    poll.addr = a; poll.pc = cpu.z.pc; poll.value = v; poll.cycles = cpu.z.cycles;
+    memcpy(poll.regs, regs, sizeof regs);
+}
+
 static uint8_t ce_read_slow(void *ctx, uint32_t a) {
     (void)ctx;
     uint8_t v = mem_read_cpu(a, false);
+    if (a >= 0xE00000) poll_check(a, v);
     if (a < 0xD00000) check_flash_map();
     return v;
 }

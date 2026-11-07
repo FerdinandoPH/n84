@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Running n84.tns opens the launcher, which lists the ROM images
- * (NAME.rom.tns) found next to it. Opening a ROM image from My Documents
- * starts it directly (the ".rom" extension is registered on every start).
+ * (NAME.rom.tns) found next to it. A ROM path given as argument starts it
+ * directly (N84 does not register ".rom": other programs use it).
  * In game, [?!>] (or ctrl+esc) opens N84's menu.
  */
 #include "platform/platform.h"
@@ -15,7 +15,6 @@
 
 int main(int argc, char **argv) {
     if (!plat_init(argc, argv)) return 1;
-    plat_register_ext("rom", "n84");
     config_load();
     if (!plat_video_init()) { plat_msgbox("N84", "LCD init failed."); plat_shutdown(); return 1; }
 
