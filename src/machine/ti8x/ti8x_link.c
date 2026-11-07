@@ -295,7 +295,9 @@ static bool direct_archive_type(uint8_t type) {
     return type == 0x05 || type == 0x06 || type == 0x15 || type == 0x17;
 }
 
-const char *ti8x_send_var(ti8x_t *m, const tivar_t *v) {
+/* On success *archived (if not NULL) tells whether it went to Flash. */
+const char *ti8x_send_var(ti8x_t *m, const tivar_t *v, bool *archived) {
+    if (archived) *archived = false;
     if (v->type == TIVAR_APP) {
         if (!reach_safe_screen(m)) {
             press(m, TK_2ND, TK_MODE);
@@ -304,6 +306,7 @@ const char *ti8x_send_var(ti8x_t *m, const tivar_t *v) {
         const char *e = install_app(m, v);
         press(m, TK_2ND, TK_MODE);
         wait_idle(m);
+        if (!e && archived) *archived = true;
         return e;
     }
     if (v->size < 2 && tivar_has_size_word(v->type)) return "corrupt variable";
@@ -373,5 +376,6 @@ const char *ti8x_send_var(ti8x_t *m, const tivar_t *v) {
     for (int i = 0; i < STUB_SIZE; i++) poke(m, (uint16_t)(STUB_ADDR + i), saved_mem[i]);
     press(m, TK_2ND, TK_MODE);              /* back to the home screen */
     wait_idle(m);
+    if (!err && archived) *archived = v->archived || direct;
     return err;
 }

@@ -17,6 +17,7 @@ typedef struct { char name[64]; bool dir; } entry_t;
 static entry_t entries[MAX_ENTRIES];
 static int nentries;
 static char cur_dir[256];
+static char last_pick[64];   /* file picked last time (selected again) */
 
 /* NAME.8xp.tns, NAME.8cv.tns, ... (and without .tns on the host) */
 static bool is_var_file(const char *n) {
@@ -69,8 +70,14 @@ static void go_up(void) {
 bool browser_pick(const char *title, char *out, size_t size, const uint16_t *backdrop) {
     snprintf(cur_dir, sizeof cur_dir, "%s", config.last_dir[0] && plat_is_dir(config.last_dir) ? config.last_dir : plat_app_dir());
     int sel = 0;
+    bool reselect = true;
     for (;;) {
         scan();
+        if (reselect) {
+            for (int i = 0; i < nentries; i++)
+                if (!entries[i].dir && !strcmp(entries[i].name, last_pick)) sel = i;
+            reselect = false;
+        }
         const char *items[MAX_ENTRIES];
         static char labels[MAX_ENTRIES][72];
         for (int i = 0; i < nentries; i++) {
@@ -94,6 +101,7 @@ bool browser_pick(const char *title, char *out, size_t size, const uint16_t *bac
             continue;
         }
         snprintf(out, size, "%s/%s", cur_dir, entries[c].name);
+        snprintf(last_pick, sizeof last_pick, "%s", entries[c].name);
         snprintf(config.last_dir, sizeof config.last_dir, "%s", cur_dir);
         config_save();
         return true;

@@ -9,6 +9,6 @@
 
 /* Creates the variable on the emulated calculator (runs the machine for a
  * while). Returns NULL on success or an error message. */
-const char *ti8x_send_var(ti8x_t *m, const tivar_t *v);
+const char *ti8x_send_var(ti8x_t *m, const tivar_t *v, bool *archived);
 
 #endif

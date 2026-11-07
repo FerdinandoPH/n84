@@ -110,7 +110,8 @@ static marks_t build_stub(uint8_t *s, const tivar_t *v, uint32_t size) {
     return mk;
 }
 
-const char *ce_send_var(const tivar_t *v) {
+const char *ce_send_var(const tivar_t *v, bool *archived) {
+    if (archived) *archived = false;
     if (v->type == TIVAR_APP) return "TI-84 Plus apps (.8xk) do not run on the CE";
     if (v->size < 2 && tivar_has_size_word(v->type)) return "corrupt variable";
     if (!reach_safe_screen()) {
@@ -159,5 +160,6 @@ const char *ce_send_var(const tivar_t *v) {
     for (int i = 0; i < STUB_SIZE; i++) mem_poke_byte(STUB_ADDR + (uint32_t)i, saved_mem[i]);
     press_key(KEY_2ND); press_key(KEY_MODE);      /* back to the home screen */
     wait_idle();
+    if (!err && archived) *archived = v->archived;
     return err;
 }

@@ -35,7 +35,7 @@ typedef struct {
     bool (*flash_changed)(void);
     bool (*flush_flash)(FILE *rom_file);
     void (*shutdown)(void);
-    const char *(*send_var)(const tivar_t *v);
+    const char *(*send_var)(const tivar_t *v, bool *archived);
 } machine_t;
 
 /* --- TI-83 Plus SE / TI-84 Plus / TI-84 Plus SE --- */
@@ -58,7 +58,7 @@ static bool ti8x_load(FILE *f) { return ti8x_load_state(&ti8x, f); }
 static bool ti8x_flash_changed(void) { return ti8x.flash_dirty; }
 static bool ti8x_flush(FILE *f) { return ti8x_flush_flash(&ti8x, f); }
 static void ti8x_shutdown(void) { ti8x_free(&ti8x); }
-static const char *ti8x_send(const tivar_t *v) { return ti8x_send_var(&ti8x, v); }
+static const char *ti8x_send(const tivar_t *v, bool *archived) { return ti8x_send_var(&ti8x, v, archived); }
 
 static const machine_t ti8x_machine = {
     NULL, ti8x_frame, ti8x_draw_fb, ti8x_release, ti8x_do_reset, ti8x_save, ti8x_load,
@@ -183,8 +183,8 @@ static void send_file(const machine_t *m, const char *path, const uint16_t *back
         ui_message("Send file", msg, bg);
         return;
     }
-    int ok = 0, total = f.count;
-    char failed[96] = "";
+    int ok = 0, total = f.count, in_archive = 0;
+    char failed[96] = "", first[48] = "";
     for (int i = 0; i < f.count; i++) {
         char what[48], line[64];
         tivar_describe(&f.vars[i], what, sizeof what);
@@ -192,13 +192,27 @@ static void send_file(const machine_t *m, const char *path, const uint16_t *back
         ui_dim(plat_video_buffer());
         snprintf(line, sizeof line, "Sending %s...", what);
         busy_box(line);
-        const char *e = m->send_var(&f.vars[i]);
+        bool arc = false;
+        const char *e = m->send_var(&f.vars[i], &arc);
         if (e) { snprintf(failed, sizeof failed, "%s: %s.", what, e); break; }
+        if (!ok) snprintf(first, sizeof first, "%s", what);
         ok++;
+        in_archive += arc;
     }
+    bool app = f.count == 1 && f.vars[0].type == TIVAR_APP;
     tivar_free(&f);
-    if (!failed[0]) snprintf(msg, sizeof msg, "Sent %d variable%s.", ok, ok == 1 ? "" : "s");
-    else snprintf(msg, sizeof msg, "Sent %d of %d. %s", ok, total, failed);
+    if (failed[0])
+        snprintf(msg, sizeof msg, "Sent %d of %d. %s", ok, total, failed);
+    else if (app)
+        snprintf(msg, sizeof msg, "Installed %s (in Flash, under APPS).", first);
+    else if (ok == 1)
+        snprintf(msg, sizeof msg, "Sent %s%s.", first, in_archive ? " to the Archive" : " to RAM");
+    else if (in_archive == ok)
+        snprintf(msg, sizeof msg, "Sent %d variables to the Archive.", ok);
+    else if (in_archive)
+        snprintf(msg, sizeof msg, "Sent %d variables (%d to the Archive, %d to RAM).", ok, in_archive, ok - in_archive);
+    else
+        snprintf(msg, sizeof msg, "Sent %d variables to RAM.", ok);
     ui_message("Send file", msg, bg);
 }
 
@@ -227,11 +241,10 @@ static menu_act_t ingame_menu(const machine_t *m, const char *state_path, bool *
         switch (r) {
         case -1: case M_RESUME: return ACT_RESUME;
         case M_SEND: {
+            /* back to the browser after each file; esc returns to this menu */
             char path[320];
-            if (browser_pick("Send", path, sizeof path, backdrop)) {
+            while (browser_pick("Send", path, sizeof path, backdrop))
                 send_file(m, path, backdrop);
-                return ACT_RESUME;
-            }
             break;
         }
         case M_SAVE:

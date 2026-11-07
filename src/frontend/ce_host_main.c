@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
             } else if (ev[i].send && t >= ev[i].t && t < ev[i].t + 1.0 / 60) {
                 tivar_file_t vf;
                 const char *e = tivar_load(ev[i].send, &vf);
-                for (int k = 0; !e && k < vf.count; k++) e = ce_send_var(&vf.vars[k]);
+                for (int k = 0; !e && k < vf.count; k++) e = ce_send_var(&vf.vars[k], NULL);
                 fprintf(stderr, "send %s: %s\n", ev[i].send, e ? e : "OK");
                 tivar_free(&vf);
             }

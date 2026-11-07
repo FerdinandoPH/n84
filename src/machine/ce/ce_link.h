@@ -8,6 +8,6 @@
 
 /* Creates the variable on the emulated calculator (runs the machine for a
  * while). Returns NULL on success or an error message. */
-const char *ce_send_var(const tivar_t *v);
+const char *ce_send_var(const tivar_t *v, bool *archived);
 
 #endif
