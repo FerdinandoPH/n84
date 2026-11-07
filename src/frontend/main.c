@@ -5,7 +5,9 @@
  * Usage on the calculator:
  *   - run n84.tns once to register the ".rom" extension
  *   - open NAME.rom.tns from "My Documents"
- *   - ctrl+esc opens the emulator menu (continue / turbo / save & exit)
+ *   - the [?!>] key (or ctrl+esc) opens the emulator menu
+ *     (continue / turbo / save & exit). [?!>] has no TI-84 equivalent, and a
+ *     single key also works in Firebird, where ctrl+esc is taken by Windows.
  * State is kept in NAME.sav.tns; Flash changes are written back to the ROM.
  */
 #include <stdlib.h>
@@ -99,7 +101,7 @@ int main(int argc, char **argv) {
 
     while (!quit) {
         plat_input_poll();
-        if (plat_key_down(PK_CTRL) && plat_key_down(PK_ESC)) {
+        if (plat_key_down(PK_QUESEXCL) || (plat_key_down(PK_CTRL) && plat_key_down(PK_ESC))) {
             int r = plat_menu3("N84", ti8x_model_name(m.model), "Continue",
                                turbo ? "Turbo: off" : "Turbo: on", "Save & exit");
             if (r == 2) turbo = !turbo;

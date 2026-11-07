@@ -16,9 +16,18 @@
 #include <os.h>
 #include <libndls.h>
 #define RESULT_FILE "n84bench.txt.tns"
+#define STEP_FILE "n84bench.log.tns"
 #else
 #define RESULT_FILE "n84bench.txt"
+#define STEP_FILE "n84bench.log"
 #endif
+
+/* Progress log written (and closed) before each risky step, so that if the
+ * calculator hangs or resets we know which step was running. */
+static void step(const char *what) {
+    FILE *f = plat_fopen(STEP_FILE, "a");
+    if (f) { fprintf(f, "%s\n", what); fclose(f); }
+}
 
 /* Synthetic workload: table walk + call/ret + LDIR block copy (see tools/) */
 static const uint8_t bench_prog[] = {
@@ -67,11 +76,14 @@ static void ez_wslow(void *c, uint32_t a, uint8_t v) { (void)c; (void)a; (void)v
 
 int main(int argc, char **argv) {
     if (!plat_init(argc, argv)) return 1;
+    { FILE *f = plat_fopen(STEP_FILE, "w"); if (f) fclose(f); }
+    step("start");
 
 #ifdef N84_NSPIRE
     out("hwtype=%u subtype=%u lcd_type=%d\n", hwtype(), nl_hwsubtype(), (int)lcd_type());
 #endif
 
+    step("timer");
     /* 1. Timer sanity */
     uint32_t t0 = plat_ticks();
     volatile uint32_t spin = 0;
@@ -83,12 +95,14 @@ int main(int argc, char **argv) {
     /* 2. Large allocations */
     size_t sizes[] = { 4u << 20, 8u << 20, 16u << 20 };
     for (unsigned i = 0; i < 3; i++) {
+        step(i == 0 ? "malloc 4MB" : i == 1 ? "malloc 8MB" : "malloc 16MB");
         void *p = malloc(sizes[i]);
         out("malloc %2uMB: %s\n", (unsigned)(sizes[i] >> 20), p ? "OK" : "FAIL");
         if (p) { memset(p, 0xA5, sizes[i]); free(p); }
     }
 
     /* 3. Video: colour bars */
+    step("lcd_init");
     bool vid = plat_video_init();
     out("lcd_init: %s\n", vid ? "OK" : "FAIL");
     if (vid) {
@@ -97,6 +111,7 @@ int main(int argc, char **argv) {
         for (int y = 0; y < PLAT_SCREEN_H; y++)
             for (int x = 0; x < PLAT_SCREEN_W; x++)
                 fb[y * PLAT_SCREEN_W + x] = bars[x / (PLAT_SCREEN_W / 8)];
+        step("blit");
         uint32_t b0 = plat_ticks();
         for (int i = 0; i < 60; i++) plat_video_present();
         uint32_t b1 = plat_ticks();
@@ -104,6 +119,7 @@ int main(int argc, char **argv) {
             out("blit: %lu fps\n", (unsigned long)(60ull * PLAT_TICKS_PER_SEC / (b1 - b0)));
     }
 
+    step("z80");
     /* 4. Z80 throughput */
     static uint8_t mem[0x10000];
     static z80_t z;
@@ -125,6 +141,7 @@ int main(int argc, char **argv) {
             khz / 150);
     }
 
+    step("ez80");
     /* 5. eZ80 throughput (same program, Z80 mode), in instructions/s */
     {
         static ez80_t e;
@@ -146,12 +163,15 @@ int main(int argc, char **argv) {
         }
     }
 
+    step("lcd shutdown");
     plat_video_shutdown();
+    step("write results");
 
     FILE *f = plat_fopen(RESULT_FILE, "w");
     if (f) { fputs(report, f); fclose(f); }
     plat_log("%s", report);
     plat_msgbox("N84 bench", report);
+    step("done");
     plat_shutdown();
     return 0;
 }

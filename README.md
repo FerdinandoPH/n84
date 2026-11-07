@@ -36,7 +36,8 @@ make nspire          # build/nspire/n84.tns y build/nspire/n84bench.tns
    **Pásame ese fichero** (o una foto de la pantalla).
 2. **Emulador:** copia `build/nspire/n84.tns` y ejecútalo una vez para registrar la extensión `.rom`.
    Copia tu volcado de ROM como `NOMBRE.rom.tns` y ábrelo desde Mis Documentos.
-   - `ctrl + esc`: menú (continuar / turbo / guardar y salir).
+   - Tecla `?!▸` (o `ctrl + esc`): menú (continuar / turbo / guardar y salir). En la Firebird usa
+     `?!▸` del panel Keypad, porque Windows se queda `ctrl + esc` para el menú de inicio.
    - El estado se guarda en `NOMBRE.sav.tns`. Los cambios en la memoria Archive se escriben
      **dentro del propio fichero ROM**, así que guarda una copia del volcado original.
 
