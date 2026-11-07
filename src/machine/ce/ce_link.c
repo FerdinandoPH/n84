@@ -118,6 +118,7 @@ const char *ce_send_var(const tivar_t *v) {
     }
     uint32_t size = tivar_has_size_word(v->type) ? (uint32_t)(v->data[0] | v->data[1] << 8) : v->size;
 
+    unsigned long free_ram = peek24(RAM_OPS) - peek24(RAM_FPS);
     uint8_t saved_mem[STUB_SIZE], stub[STUB_SIZE];
     for (int i = 0; i < STUB_SIZE; i++) saved_mem[i] = mem_peek_byte(STUB_ADDR + (uint32_t)i);
     ez80_t saved = cpu.z;
@@ -142,9 +143,7 @@ const char *ce_send_var(const tivar_t *v) {
             err = NULL;
             break;
         } else if (pc == mk.error) {
-            static char msg[48];
-            snprintf(msg, sizeof msg, "the calculator OS reported error %u", cpu.z.a & 0x7F);
-            err = msg;
+            err = tivar_os_error(cpu.z.a, v->size, free_ram);
             break;
         }
     }

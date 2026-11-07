@@ -94,3 +94,16 @@ void tivar_describe(const tivar_t *v, char *buf, size_t size) {
     }
     snprintf(buf, size, "%s %s", kind, name);
 }
+
+const char *tivar_os_error(unsigned code, unsigned need, unsigned long free_ram) {
+    static char msg[96];
+    switch (code & 0x7F) {
+    case 14:
+        snprintf(msg, sizeof msg, "not enough free RAM (needs %u bytes, %lu free)", need, free_ram);
+        break;
+    case 47: snprintf(msg, sizeof msg, "a variable with that name is archived"); break;
+    case 49: snprintf(msg, sizeof msg, "the archive is full"); break;
+    default: snprintf(msg, sizeof msg, "the calculator OS reported error %u", code & 0x7F);
+    }
+    return msg;
+}

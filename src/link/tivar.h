@@ -37,4 +37,8 @@ void tivar_describe(const tivar_t *v, char *buf, size_t size);
  * AppVars, strings, equations, pictures, groups, ...). */
 bool tivar_has_size_word(uint8_t type);
 
+/* Message for an OS error code met while creating a variable of `need`
+ * bytes with `free_ram` bytes free (14 = ERR:MEMORY, ...). */
+const char *tivar_os_error(unsigned code, unsigned need, unsigned long free_ram);
+
 #endif
