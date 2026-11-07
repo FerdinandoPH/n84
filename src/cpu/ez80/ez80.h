@@ -61,10 +61,10 @@ struct ez80 {
     int32_t cycles, cycle_target;
     uint64_t total_cycles;
 
-    /* memory map */
+    /* memory map (cost first: keeps it within ARM immediate-offset range) */
+    uint8_t cost[EZ80_NUM_PAGES];
     uint8_t *rd[EZ80_NUM_PAGES];
     uint8_t *wr[EZ80_NUM_PAGES];
-    uint8_t cost[EZ80_NUM_PAGES];
 
     void *ctx;
     uint8_t (*read_slow)(void *ctx, uint32_t addr);

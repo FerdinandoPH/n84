@@ -10,6 +10,8 @@
 
 #define likely(x)   __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
+#define ALWAYS_INLINE inline __attribute__((always_inline))
+#define NOINLINE __attribute__((noinline))
 
 #define CF EZ80_CF
 #define NF EZ80_NF
@@ -33,8 +35,8 @@ static void init_tables(void) {
     tables_ready = true;
 }
 
-static inline uint8_t sz(uint8_t v) { return (uint8_t)((v & SF) | (v ? 0 : ZF)); }
-static inline uint8_t szp(uint8_t v) { return (uint8_t)(sz(v) | parity_tab[v]); }
+static ALWAYS_INLINE uint8_t sz(uint8_t v) { return (uint8_t)((v & SF) | (v ? 0 : ZF)); }
+static ALWAYS_INLINE uint8_t szp(uint8_t v) { return (uint8_t)(sz(v) | parity_tab[v]); }
 
 /* ---- addressing ------------------------------------------------------ */
 
@@ -43,19 +45,24 @@ static inline uint32_t addr_mode(const ez80_t *z, uint32_t a, unsigned mode) {
     return mode ? (a & 0xFFFFFFu) : (((uint32_t)z->mbase << 16) | (a & 0xFFFFu));
 }
 
-static inline uint8_t mem_rd(ez80_t *z, uint32_t a) {
+/* Direct page access is inlined; MMIO/Flash/unmapped go through out-of-line
+ * helpers so that the inlined part stays small. */
+static NOINLINE uint8_t mem_rd_slow(ez80_t *z, uint32_t a) { return z->read_slow(z->ctx, a); }
+static NOINLINE void mem_wr_slow(ez80_t *z, uint32_t a, uint8_t v) { z->write_slow(z->ctx, a, v); }
+
+static ALWAYS_INLINE uint8_t mem_rd(ez80_t *z, uint32_t a) {
     unsigned pg = a >> EZ80_PAGE_SHIFT;
     z->cycles += z->cost[pg];
     const uint8_t *p = z->rd[pg];
-    if (likely(p)) return p[a & EZ80_PAGE_MASK];
-    return z->read_slow(z->ctx, a);
+    if (likely(p != NULL)) return p[a & EZ80_PAGE_MASK];
+    return mem_rd_slow(z, a);
 }
-static inline void mem_wr(ez80_t *z, uint32_t a, uint8_t v) {
+static ALWAYS_INLINE void mem_wr(ez80_t *z, uint32_t a, uint8_t v) {
     unsigned pg = a >> EZ80_PAGE_SHIFT;
     z->cycles += z->cost[pg];
     uint8_t *p = z->wr[pg];
-    if (likely(p)) p[a & EZ80_PAGE_MASK] = v;
-    else z->write_slow(z->ctx, a, v);
+    if (likely(p != NULL)) p[a & EZ80_PAGE_MASK] = v;
+    else mem_wr_slow(z, a, v);
 }
 
 static inline uint8_t fetch(ez80_t *z) {
@@ -287,12 +294,12 @@ static void trap(ez80_t *z, unsigned rewind) {
 
 /* ---- ALU ----------------------------------------------------------------- */
 
-static inline uint8_t hc_add(uint8_t a, uint8_t b, unsigned c) { return (((a & 0xF) + (b & 0xF) + c) & 0x10) ? HF : 0; }
-static inline uint8_t hc_sub(uint8_t a, uint8_t b, unsigned c) { return (((a & 0xF) - (b & 0xF) - c) & 0x10) ? HF : 0; }
-static inline uint8_t ov_add(uint8_t a, uint8_t b, uint8_t r) { return ((a ^ r) & (b ^ r) & 0x80) ? PF : 0; }
-static inline uint8_t ov_sub(uint8_t a, uint8_t b, uint8_t r) { return ((a ^ b) & (a ^ r) & 0x80) ? PF : 0; }
+static ALWAYS_INLINE uint8_t hc_add(uint8_t a, uint8_t b, unsigned c) { return (((a & 0xF) + (b & 0xF) + c) & 0x10) ? HF : 0; }
+static ALWAYS_INLINE uint8_t hc_sub(uint8_t a, uint8_t b, unsigned c) { return (((a & 0xF) - (b & 0xF) - c) & 0x10) ? HF : 0; }
+static ALWAYS_INLINE uint8_t ov_add(uint8_t a, uint8_t b, uint8_t r) { return ((a ^ r) & (b ^ r) & 0x80) ? PF : 0; }
+static ALWAYS_INLINE uint8_t ov_sub(uint8_t a, uint8_t b, uint8_t r) { return ((a ^ b) & (a ^ r) & 0x80) ? PF : 0; }
 
-static void alu(ez80_t *z, unsigned op, uint8_t v) {
+static ALWAYS_INLINE void alu(ez80_t *z, unsigned op, uint8_t v) {
     uint8_t a = z->a, r;
     unsigned c = z->f & CF, t;
     switch (op) {
@@ -922,20 +929,36 @@ static void run_adl(ez80_t *z) { exec(z); }
 static void run_z80(ez80_t *z) { exec(z); }
 #else
 #include "ez80_fast.inc"
-static void exec_adl(ez80_t *z) { if (!exec_fast(z, 1)) exec(z); }
-static void exec_z80(ez80_t *z) { if (!exec_fast(z, 0)) exec(z); }
+static ALWAYS_INLINE void exec_mode(ez80_t *z, const unsigned M) {
+    fc_t c = { z->pc, z->cycles, 0 };
+    if (exec_fast(z, &c, M)) { z->pc = c.pc; z->cycles = c.cyc; }
+    else exec(z);
+}
+static void exec_adl(ez80_t *z) { exec_mode(z, 1); }
+static void exec_z80(ez80_t *z) { exec_mode(z, 0); }
 
 /* Run instructions in one mode until something needs the outer loop: the
  * cycle budget is spent, an interrupt may be taken, EI/HALT executed, or the
  * generic decoder changed the mode. */
-static inline __attribute__((always_inline)) void run_mode(ez80_t *z, const unsigned M) {
-    do {
-        if (!exec_fast(z, M)) {
+static ALWAYS_INLINE void run_mode(ez80_t *z, const unsigned M) {
+    /* brk starts set: the first instruction may be the one right after EI,
+     * and the interrupt check must happen once it has executed */
+    fc_t c = { z->pc, z->cycles, 1 };
+    for (;;) {
+        if (!exec_fast(z, &c, M)) {
+            z->pc = c.pc; z->cycles = c.cyc;
             exec(z);
-            if (z->adl != M) return;
+            c.pc = z->pc; c.cyc = z->cycles;
+            if (z->adl != M) break;
+            c.brk = 1;
         }
-    } while (z->cycles < z->cycle_target &&
-             !(z->nmi_pending | (z->irq_line & z->iff1) | z->ei_delay | z->halted));
+        if (c.cyc >= z->cycle_target) break;
+        if (c.brk) {
+            c.brk = 0;
+            if (z->nmi_pending | (z->irq_line & z->iff1) | z->ei_delay | z->halted) break;
+        }
+    }
+    z->pc = c.pc; z->cycles = c.cyc;
 }
 static void run_adl(ez80_t *z) { run_mode(z, 1); }
 static void run_z80(ez80_t *z) { run_mode(z, 0); }

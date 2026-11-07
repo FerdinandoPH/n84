@@ -9,11 +9,12 @@ Licencia GPLv3. Especificación en [docs/SPEC.md](docs/SPEC.md); viabilidad en [
 |---|---|
 | F0 Infraestructura | Hecha en el host. **Falta validarla en la Firebird y en la calculadora real** con `n84bench.tns` |
 | F1 Núcleo Z80 | ✅ Pasa ZEXDOC y ZEXALL (67/67) |
-| F2 TI-84+ en el host | ✅ Hardware implementado y probado con una ROM sintética. **Falta arrancar el TI-OS real** (no hay ROM todavía) |
-| F3 TI-84+ en la Nspire | Código hecho (`n84.tns`), **sin probar en hardware** |
+| F2 TI-84+ en el host | ✅ Arranca el TI-OS 2.55MP real: cálculos y gráficas (`make rom-smoke`) |
+| F3 TI-84+ en la Nspire | ✅ Funciona en la Firebird (cálculos básicos). Falta probarlo en la calculadora real |
 | F4 Ficheros y variantes Z80 | Pendiente |
-| F5 Núcleo eZ80 | ✅ Primera versión: pasa ZEXDOC en modo Z80 (salvo los tests de opcodes que en un eZ80 real provocan trap) y 30 tests propios de ADL, sufijos, MBASE y llamadas mixtas. **Sin optimizar** y pendiente de compararlo con CEmu |
-| F6–F9 | Pendientes (siguiente: máquina TI-84 Plus CE en el host) |
+| F5 Núcleo eZ80 | ✅ Pasa ZEXDOC en modo Z80 (salvo los opcodes que en un eZ80 real provocan trap) y 30 tests propios de ADL, sufijos, MBASE y llamadas mixtas |
+| F7 Optimización eZ80 | ✅ Ruta rápida especializada por modo. Benchmark en la Firebird: **48,5 MHz equivalentes (101 % de una CE)**, antes ~20 MHz. Un test diferencial (`ez80_diff`) la compara con el decodificador genérico instrucción a instrucción |
+| F6, F8, F9 | Pendientes (siguiente: máquina TI-84 Plus CE en el host) |
 
 Modelos Z80 soportados: TI-83 Plus SE, TI-84 Plus y TI-84 Plus SE. La TI-83 Plus "básica" (512 KB) se añadirá después.
 
