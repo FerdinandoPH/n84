@@ -51,8 +51,10 @@ static bool find_bytes(const uint8_t *buf, size_t len, const char *s, size_t sle
 ti8x_model_t ti8x_detect_model(const uint8_t *rom, size_t size) {
     if (size >= 0x100000 && size < 0x124000) return TI8X_MODEL_84P;
     if (size >= 0x200000 && size < 0x224000) {
-        /* Same test as TilEm: the 84+SE boot sector mentions "Operating" */
-        if (find_bytes(rom + 0x1FC000, 0x4000, "Operating", 9)) return TI8X_MODEL_84PSE;
+        /* Same test as TilEm: the 84+SE boot sector mentions "Operating".
+         * BootFree (free boot code replacement) is only built for the 84+ family. */
+        if (find_bytes(rom + 0x1FC000, 0x4000, "Operating", 9) ||
+            find_bytes(rom + 0x1FC000, 0x4000, "BootFree", 8)) return TI8X_MODEL_84PSE;
         return TI8X_MODEL_83PSE;
     }
     return TI8X_MODEL_NONE;
@@ -712,7 +714,13 @@ static void handle_event(ti8x_t *m, int e) {
         crys_expired(m, e - TI8X_EV_CRYS0);
         break;
     case TI8X_EV_LCD_SAMPLE:
-        if (m->lcd_samples < 255) lcd_sample(m);
+        /* Nobody consumed the last frames: restart the blending window so a
+         * late reader sees recent content rather than a stale/saturated one. */
+        if (m->lcd_samples >= 2u * (m->lcd_samples_per_frame ? m->lcd_samples_per_frame : 1)) {
+            memset(m->lcd_acc, 0, sizeof m->lcd_acc);
+            m->lcd_samples = 0;
+        }
+        lcd_sample(m);
         m->ev[e] += TI8X_TICKS_PER_SEC / 60u / (m->lcd_samples_per_frame ? m->lcd_samples_per_frame : 1);
         break;
     }

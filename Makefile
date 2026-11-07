@@ -17,7 +17,7 @@ PLAT_HOST := src/platform/host/plat_host.c
 VIEW_TI8X := src/frontend/ti8x_view.c
 HDRS      := $(wildcard src/*/*.h src/*/*/*.h)
 
-.PHONY: all host test test-full nspire clean
+.PHONY: all host test test-full rom-smoke nspire clean
 
 all: host
 
@@ -65,6 +65,9 @@ test: $(HB)/zextest $(HB)/ezextest $(HB)/ez80_adl_test $(HB)/ti8x_test $(BUILD)/
 test-full: test
 	$(HB)/zextest tests/z80/zexall.com | tee $(BUILD)/zexall.log
 	@! grep -q "ERROR" $(BUILD)/zexall.log
+
+rom-smoke: $(HB)/n84-host
+	tools/rom_smoke.sh $(ROM)
 
 nspire:
 	$(MAKE) -f Makefile.nspire
