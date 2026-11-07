@@ -235,12 +235,77 @@ static const char *archive_fill(ti8x_t *m, const tivar_t *v, uint16_t vat, uint3
     return NULL;
 }
 
+/*
+ * Flash apps: whole 16 KiB pages that grow down from the top archive page
+ * (the app's first page, with the 800Fh header, is the highest). A base page
+ * starting with 80h is a valid app, 00h a deleted one (until Garbage
+ * Collect); field 8081h holds the page count, 804xh the name. The OS walks
+ * this chain when it lists apps, so writing the pages is all it takes (the
+ * signature is only checked by the OS's link receiver).
+ */
+static bool app_name_is(const uint8_t *pg, const uint8_t *name) {
+    for (unsigned i = 0; i < 0x80; i++)
+        if (pg[i] == 0x80 && (pg[i + 1] & 0xF0) == 0x40) {
+            unsigned len = pg[i + 1] & 0x0F;
+            for (unsigned k = 0; k < 8; k++) {
+                uint8_t a = k < len ? pg[i + 2 + k] : ' ', b = name[k] ? name[k] : ' ';
+                if (a != b) return false;
+            }
+            return true;
+        }
+    return false;
+}
+
+static const char *install_app(ti8x_t *m, const tivar_t *v) {
+    unsigned n = v->size / 0x4000;
+    /* delete an installed copy */
+    unsigned p = archive_top_page(m);
+    while (p >= 8 && (m->flash[p * 0x4000u] == 0x80 || m->flash[p * 0x4000u] == 0x00)) {
+        const uint8_t *pg = m->flash + p * 0x4000u;
+        unsigned pages = 1;
+        for (unsigned i = 0; i < 0x80; i++)
+            if (pg[i] == 0x80 && pg[i + 1] == 0x81) { pages = pg[i + 2] ? pg[i + 2] : 1; break; }
+        if (pg[0] == 0x80 && app_name_is(pg, v->name)) flash_write(m, p * 0x4000u, 0x00);
+        if (pages > p) break;
+        p -= pages;
+    }
+    unsigned top = lowest_app_page(m) - 1, bottom = top + 1 - n;
+    if (n == 0 || n > top || bottom < 0x08) return "not enough Flash for the app";
+    /* the pages must be free, in sectors the archive does not use */
+    for (unsigned q = bottom; q <= top; q++) {
+        const uint8_t *pg = m->flash + q * 0x4000u;
+        for (unsigned i = 0; i < 0x4000; i++)
+            if (pg[i] != 0xFF) return "not enough free Flash for the app (try Garbage Collect in the MEM menu)";
+    }
+    unsigned empty = 0;
+    bool swap = false;
+    for (unsigned sc = 0x08 / 4; sc < bottom / 4; sc++) {
+        if (m->flash[sc * SECTOR] == 0xFE) swap = true;
+        if (m->flash[sc * SECTOR] == 0xFF) empty++;
+    }
+    if (!swap && !empty) return "not enough free Flash for the app (try Garbage Collect in the MEM menu)";
+    for (unsigned k = 0; k < n; k++)
+        for (unsigned i = 0; i < 0x4000; i++)
+            if (v->data[k * 0x4000u + i] != 0xFF) flash_write(m, (top - k) * 0x4000u + i, v->data[k * 0x4000u + i]);
+    return NULL;
+}
+
 static bool direct_archive_type(uint8_t type) {
     type &= 0x1F;
     return type == 0x05 || type == 0x06 || type == 0x15 || type == 0x17;
 }
 
 const char *ti8x_send_var(ti8x_t *m, const tivar_t *v) {
+    if (v->type == TIVAR_APP) {
+        if (!reach_safe_screen(m)) {
+            press(m, TK_2ND, TK_MODE);
+            return "the calculator is busy (go to the home screen and try again)";
+        }
+        const char *e = install_app(m, v);
+        press(m, TK_2ND, TK_MODE);
+        wait_idle(m);
+        return e;
+    }
     if (v->size < 2 && tivar_has_size_word(v->type)) return "corrupt variable";
     if (!reach_safe_screen(m)) {
         press(m, TK_2ND, TK_MODE);
@@ -251,8 +316,9 @@ const char *ti8x_send_var(ti8x_t *m, const tivar_t *v) {
         ? (uint16_t)(v->data[0] | v->data[1] << 8) : v->size;
 
     unsigned free_ram = (unsigned)(peek16(m, RAM_OPS) - peek16(m, RAM_FPS));
-    /* big archived variable: create it empty, archive it, then fill it in */
-    bool direct = v->archived && direct_archive_type(v->type) && tivar_has_size_word(v->type)
+    /* too big for the RAM (archived or not): create it empty, archive it,
+     * then fill it in (like choosing "Archive" when sending from a computer) */
+    bool direct = direct_archive_type(v->type) && tivar_has_size_word(v->type)
                   && v->size + 64u > free_ram;
     if (direct) create_size = 0;
     uint8_t saved_mem[STUB_SIZE], stub[STUB_SIZE];
@@ -260,7 +326,7 @@ const char *ti8x_send_var(ti8x_t *m, const tivar_t *v) {
     z80_t saved = m->cpu;
 
     memset(stub, 0, sizeof stub);
-    stub_marks_t mk = build_stub(stub, v, create_size, v->archived);
+    stub_marks_t mk = build_stub(stub, v, create_size, v->archived || direct);
     for (int i = 0; i < STUB_SIZE; i++) poke(m, (uint16_t)(STUB_ADDR + i), stub[i]);
 
     m->cpu.pc.w = STUB_ADDR;

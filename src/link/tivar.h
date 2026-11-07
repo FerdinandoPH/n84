@@ -14,19 +14,24 @@ typedef struct {
     uint8_t name[8];         /* as stored on the calculator (zero padded) */
     uint8_t version;
     bool archived;           /* the file asks for the variable to be archived */
-    const uint8_t *data;     /* variable data, including its own size field */
-    uint16_t size;
+    const uint8_t *data;     /* variable data, including its own size field;
+                                for TIVAR_APP: the app's 16 KiB pages in order */
+    uint32_t size;
 } tivar_t;
+
+/* Flash application (.8xk): type TIVAR_APP, size = pages * 16 KiB */
+#define TIVAR_APP 0x24
 
 #define TIVAR_MAX 64
 
 typedef struct {
-    uint8_t *buf;            /* owned file contents */
+    uint8_t *buf;            /* owned file contents (or decoded app pages) */
     tivar_t vars[TIVAR_MAX];
     int count;
 } tivar_file_t;
 
-/* Parses a file. Returns NULL on success or a short error message. */
+/* Parses a file (variables, or a TI-83 Plus/TI-84 Plus Flash app).
+ * Returns NULL on success or a short error message. */
 const char *tivar_load(const char *path, tivar_file_t *out);
 void tivar_free(tivar_file_t *f);
 

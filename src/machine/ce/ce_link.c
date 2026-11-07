@@ -111,6 +111,7 @@ static marks_t build_stub(uint8_t *s, const tivar_t *v, uint32_t size) {
 }
 
 const char *ce_send_var(const tivar_t *v) {
+    if (v->type == TIVAR_APP) return "TI-84 Plus apps (.8xk) do not run on the CE";
     if (v->size < 2 && tivar_has_size_word(v->type)) return "corrupt variable";
     if (!reach_safe_screen()) {
         press_key(KEY_2ND); press_key(KEY_MODE);
