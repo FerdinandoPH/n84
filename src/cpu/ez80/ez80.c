@@ -913,6 +913,34 @@ static void exec(ez80_t *z) {
     }
 }
 
+/* ---- fast path ----------------------------------------------------------------- */
+
+#ifdef EZ80_NO_FAST   /* reference build for tests/ez80/ez80_diff.c */
+static void exec_adl(ez80_t *z) { exec(z); }
+static void exec_z80(ez80_t *z) { exec(z); }
+static void run_adl(ez80_t *z) { exec(z); }
+static void run_z80(ez80_t *z) { exec(z); }
+#else
+#include "ez80_fast.inc"
+static void exec_adl(ez80_t *z) { if (!exec_fast(z, 1)) exec(z); }
+static void exec_z80(ez80_t *z) { if (!exec_fast(z, 0)) exec(z); }
+
+/* Run instructions in one mode until something needs the outer loop: the
+ * cycle budget is spent, an interrupt may be taken, EI/HALT executed, or the
+ * generic decoder changed the mode. */
+static inline __attribute__((always_inline)) void run_mode(ez80_t *z, const unsigned M) {
+    do {
+        if (!exec_fast(z, M)) {
+            exec(z);
+            if (z->adl != M) return;
+        }
+    } while (z->cycles < z->cycle_target &&
+             !(z->nmi_pending | (z->irq_line & z->iff1) | z->ei_delay | z->halted));
+}
+static void run_adl(ez80_t *z) { run_mode(z, 1); }
+static void run_z80(ez80_t *z) { run_mode(z, 0); }
+#endif
+
 /* ---- public API -------------------------------------------------------------- */
 
 void ez80_init(ez80_t *z) {
@@ -960,7 +988,7 @@ void ez80_step(ez80_t *z) {
     }
     z->ei_delay = 0;
     if (z->halted) { z->cycles++; return; }
-    exec(z);
+    if (z->adl) exec_adl(z); else exec_z80(z);
 }
 
 int32_t ez80_run(ez80_t *z, int32_t n) {
@@ -973,7 +1001,7 @@ int32_t ez80_run(ez80_t *z, int32_t n) {
             z->cycles = z->cycle_target;
             break;
         }
-        exec(z);
+        if (z->adl) run_adl(z); else run_z80(z);
     }
     z->total_cycles += (uint64_t)z->cycles;
     return z->cycles;

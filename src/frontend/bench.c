@@ -142,24 +142,53 @@ int main(int argc, char **argv) {
     }
 
     step("ez80");
-    /* 5. eZ80 throughput (same program, Z80 mode), in instructions/s */
+    /* 5. eZ80 throughput: same loop in ADL mode (24-bit pointers) running from
+     * RAM at D00000, as CE programs do. Every memory access costs 3 cycles
+     * (CEmu: RAM ~2-4, cached flash 2-3), so the result is comparable with
+     * the real 48 MHz CPU. */
     {
         static ez80_t e;
+        static const uint8_t prog[] = {
+            0x31, 0x00, 0xF0, 0xD0,   /* 00 ld sp,D0F000h       */
+            0x06, 0x00,               /* 04 ld b,0        outer */
+            0x21, 0x00, 0x80, 0xD0,   /* 06 ld hl,D08000h loop  */
+            0x11, 0x00, 0x90, 0xD0,   /* 0A ld de,D09000h       */
+            0x7E,                     /* 0E ld a,(hl)           */
+            0x80,                     /* 0F add a,b             */
+            0x12,                     /* 10 ld (de),a           */
+            0x23,                     /* 11 inc hl              */
+            0xCD, 0x2A, 0x00, 0xD0,   /* 12 call D0002Ah        */
+            0x10, 0xEE,               /* 16 djnz 06h            */
+            0x21, 0x00, 0x80, 0xD0,   /* 18 ld hl,D08000h       */
+            0x11, 0x00, 0xA0, 0xD0,   /* 1C ld de,D0A000h       */
+            0x01, 0x40, 0x00, 0x00,   /* 20 ld bc,64            */
+            0xED, 0xB0,               /* 24 ldir                */
+            0x18, 0xDC,               /* 26 jr 04h              */
+            0x00, 0x00,               /* 28 (pad)               */
+            0xC5,                     /* 2A push bc             */
+            0x4F,                     /* 2B ld c,a              */
+            0xAF,                     /* 2C xor a               */
+            0xCB, 0x11,               /* 2D rl c                */
+            0x89,                     /* 2F adc a,c             */
+            0xC1,                     /* 30 pop bc              */
+            0xC9,                     /* 31 ret                 */
+        };
         ez80_init(&e);
-        for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { e.rd[i] = e.wr[i] = NULL; e.cost[i] = 1; }
-        for (unsigned i = 0; i < 16; i++) e.rd[i] = e.wr[i] = mem + i * EZ80_PAGE_SIZE;
-        memcpy(mem, bench_prog, sizeof bench_prog);
+        for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { e.rd[i] = e.wr[i] = NULL; e.cost[i] = 3; }
+        for (unsigned i = 0; i < 16; i++) e.rd[0xD00 + i] = e.wr[0xD00 + i] = mem + i * EZ80_PAGE_SIZE;
+        memset(mem, 0, sizeof mem);
+        memcpy(mem, prog, sizeof prog);
         e.ctx = &e; e.read_slow = ez_rslow; e.write_slow = ez_wslow; e.port_in = dummy_in; e.port_out = dummy_out;
+        e.adl = 1; e.pc = 0xD00000;
         uint32_t s0 = plat_ticks(), s1;
-        uint64_t insns = 0;
+        uint64_t ecyc = 0;
         do {
-            for (int i = 0; i < 10000; i++) ez80_step(&e);
-            insns += 10000;
+            ecyc += (uint64_t)ez80_run(&e, 100000);
             s1 = plat_ticks();
-        } while (s1 - s0 < 2 * PLAT_TICKS_PER_SEC && insns < 4000000000ull);
+        } while (s1 - s0 < 2 * PLAT_TICKS_PER_SEC && ecyc < 20000000000ull);
         if (s1 != s0) {
-            unsigned long kips = (unsigned long)(insns * PLAT_TICKS_PER_SEC / (s1 - s0) / 1000u);
-            out("eZ80: %lu.%02lu MIPS\n", kips / 1000, (kips % 1000) / 10);
+            unsigned long khz = (unsigned long)(ecyc * PLAT_TICKS_PER_SEC / (s1 - s0) / 1000u);
+            out("eZ80: %lu.%02lu MHz equiv (%lu%% of 48MHz)\n", khz / 1000, (khz % 1000) / 10, khz / 480);
         }
     }
 
