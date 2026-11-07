@@ -25,6 +25,7 @@ Modelos soportados: TI-83 Plus SE, TI-84 Plus, TI-84 Plus SE (Z80) y TI-84 Plus 
 ```sh
 make host            # herramientas del PC: tests, benchmark, n84-host
 make test            # ZEXDOC + test de la máquina TI-84+ con ROM sintética
+make rom-smoke       # con tus ROMs en roms/: arranque, cálculo, gráfica y prueba del lanzador (n84-ui)
 make test-full       # además ZEXALL (~40 s)
 export PATH=$HOME/Ndless/ndless-sdk/bin:$PATH
 make nspire          # build/nspire/n84.tns y build/nspire/n84bench.tns
@@ -37,12 +38,16 @@ make nspire          # build/nspire/n84.tns y build/nspire/n84bench.tns
    bloques de 4, 8 y 16 MB, los FPS del `lcd_blit`, la velocidad del núcleo Z80 en MHz equivalentes
    y la del eZ80 en MIPS.
    **Pásame ese fichero** (o una foto de la pantalla).
-2. **Emulador:** copia `build/nspire/n84.tns` y ejecútalo una vez para registrar la extensión `.rom`.
-   Copia tu volcado de ROM como `NOMBRE.rom.tns` y ábrelo desde Mis Documentos.
-   - Tecla `?!▸` (o `ctrl + esc`): menú (continuar / turbo / guardar y salir). En la Firebird usa
-     `?!▸` del panel Keypad, porque Windows se queda `ctrl + esc` para el menú de inicio.
-   - El estado se guarda en `NOMBRE.sav.tns`. Los cambios en la memoria Archive se escriben
+2. **Emulador:** copia `build/nspire/n84.tns` y tus volcados de ROM (`NOMBRE.rom.tns`) **en la misma carpeta**.
+   - Al abrir `n84.tns` aparece el **lanzador**: lista de ROMs con su modelo (`*` = tiene estado guardado).
+     `enter` ejecuta, `menu` (o `?!▸`) abre las opciones (información, borrar estado, ajustes), `esc` sale.
+   - También se puede abrir una ROM directamente desde Mis documentos.
+   - Dentro de la emulación, `?!▸` (o `ctrl + esc`) abre el menú de N84: continuar, guardar/cargar estado,
+     resetear, turbo, indicador de velocidad, volver al lanzador o salir. En la Firebird usa `?!▸` del panel
+     Keypad, porque Windows se queda `ctrl + esc`.
+   - El estado se guarda en `NOMBRE.sav.tns` al salir. Los cambios en la memoria Archive se escriben
      **dentro del propio fichero ROM**, así que guarda una copia del volcado original.
+   - Ajustes globales en `n84.cfg.tns`.
 
 ### Teclado (por defecto)
 

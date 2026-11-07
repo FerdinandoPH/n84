@@ -66,5 +66,13 @@ void     plat_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 /* Files: paths are given without the Nspire ".tns" suffix handling; the
  * platform layer is responsible for any naming convention. */
 FILE    *plat_fopen(const char *path, const char *mode);
+bool     plat_remove(const char *path);
+/* Size of a file in bytes, or -1 if it does not exist. */
+long     plat_file_size(const char *path);
+/* Directory that holds the program (n84.tns), without a trailing slash. */
+const char *plat_app_dir(void);
+/* Calls cb(name) for each entry of dir (no "." / ".."); stops early when cb
+ * returns false. Returns false if the directory cannot be opened. */
+bool     plat_list_dir(const char *dir, bool (*cb)(const char *name, void *ctx), void *ctx);
 
 #endif

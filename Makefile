@@ -9,6 +9,8 @@ HOST_CC     ?= gcc
 HOST_CFLAGS ?= -O2 -g -std=gnu11 -Wall -Wextra -Isrc
 BUILD       := build
 HB          := $(BUILD)/host
+FRONTEND  := src/frontend/main.c src/frontend/session.c src/frontend/launcher.c src/frontend/ui.c \
+             src/frontend/config.c src/frontend/keymap_ti8x.c src/frontend/ti8x_view.c
 
 CORE_Z80  := src/cpu/z80/z80.c
 CORE_EZ80 := src/cpu/ez80/ez80.c
@@ -22,7 +24,7 @@ HDRS      := $(wildcard src/*/*.h src/*/*/*.h src/*/*/*/*.h src/*/*/*.inc)
 
 all: host
 
-host: $(HB)/zextest $(HB)/ezextest $(HB)/ez80_adl_test $(HB)/ez80_diff $(HB)/bench $(HB)/ti8x_test $(HB)/n84-host $(HB)/n84ce-host
+host: $(HB)/zextest $(HB)/ezextest $(HB)/ez80_adl_test $(HB)/ez80_diff $(HB)/bench $(HB)/ti8x_test $(HB)/n84-host $(HB)/n84ce-host $(HB)/n84-ui
 
 $(HB)/zextest: tests/z80/zextest.c $(CORE_Z80) $(HDRS)
 	@mkdir -p $(dir $@)
@@ -56,6 +58,11 @@ $(HB)/n84ce-host: src/frontend/ce_host_main.c $(CORE_EZ80) $(CE_SRC) $(PLAT_HOST
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -Isrc/machine/ce -DCE_LOG=printf -o $@ $(filter %.c,$^)
 
+# The real Nspire frontend on the host platform (script mode, see plat_host.c)
+$(HB)/n84-ui: $(FRONTEND) $(CORE_Z80) $(CORE_EZ80) $(TI8X) $(CE_SRC) $(PLAT_HOST) $(HDRS)
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -o $@ $(filter %.c,$^)
+
 $(BUILD)/ti84p_test.rom: tools/mk_ti8x_testrom.py
 	@mkdir -p $(dir $@)
 	python3 tools/mk_ti8x_testrom.py $@
@@ -76,8 +83,9 @@ test-full: test
 	$(HB)/zextest tests/z80/zexall.com | tee $(BUILD)/zexall.log
 	@! grep -q "ERROR" $(BUILD)/zexall.log
 
-rom-smoke: $(HB)/n84-host $(HB)/n84ce-host
+rom-smoke: $(HB)/n84-host $(HB)/n84ce-host $(HB)/n84-ui
 	tools/rom_smoke.sh $(ROM)
+	tests/ui/smoke.sh
 
 nspire:
 	$(MAKE) -f Makefile.nspire

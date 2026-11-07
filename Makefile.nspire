@@ -20,7 +20,8 @@ COMMON_SRC := src/cpu/z80/z80.c src/platform/nspire/plat_nspire.c
 
 CE_SRC     := $(wildcard src/machine/ce/*.c) src/cpu/ez80/ez80.c
 
-N84_SRC    := src/frontend/main.c src/frontend/ti8x_view.c src/frontend/keymap_ti8x.c \
+N84_SRC    := src/frontend/main.c src/frontend/session.c src/frontend/launcher.c src/frontend/ui.c \
+              src/frontend/config.c src/frontend/ti8x_view.c src/frontend/keymap_ti8x.c \
               src/machine/ti8x/ti8x.c $(CE_SRC) $(COMMON_SRC)
 N84_OBJ    := $(patsubst src/%.c,$(BUILD)/%.o,$(N84_SRC))
 

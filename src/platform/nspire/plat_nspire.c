@@ -8,6 +8,7 @@
  */
 #include <os.h>
 #include <libndls.h>
+#include <dirent.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -167,9 +168,41 @@ void plat_log(const char *fmt, ...) {
 
 FILE *plat_fopen(const char *path, const char *mode) { return fopen(path, mode); }
 
+bool plat_remove(const char *path) { return remove(path) == 0; }
+
+long plat_file_size(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    fclose(f);
+    return n;
+}
+
+static char app_dir[256] = ".";
+const char *plat_app_dir(void) { return app_dir; }
+
+bool plat_list_dir(const char *dir, bool (*cb)(const char *name, void *ctx), void *ctx) {
+    DIR *d = opendir(dir);
+    if (!d) return false;
+    struct dirent *e;
+    while ((e = readdir(d)) != NULL) {
+        if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+        if (!cb(e->d_name, ctx)) break;
+    }
+    closedir(d);
+    return true;
+}
+
 bool plat_init(int argc, char **argv) {
     (void)argc;
-    if (argv && argv[0]) enable_relative_paths(argv);
+    if (argv && argv[0]) {
+        enable_relative_paths(argv);
+        strncpy(app_dir, argv[0], sizeof app_dir - 1);
+        char *slash = strrchr(app_dir, '/');
+        if (slash && slash != app_dir) *slash = 0;
+        else strcpy(app_dir, "/documents");
+    }
     timer_start();
     return true;
 }

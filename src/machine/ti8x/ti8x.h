@@ -120,6 +120,8 @@ typedef struct ti8x {
 } ti8x_t;
 
 ti8x_model_t ti8x_detect_model(const uint8_t *rom, size_t size);
+/* Same, from the image size and its last (boot) 16 KiB page only. */
+ti8x_model_t ti8x_detect_model_boot(size_t size, const uint8_t *boot_page);
 const char  *ti8x_model_name(ti8x_model_t m);
 
 /* Takes ownership of nothing: the ROM is copied. Returns false on bad size. */

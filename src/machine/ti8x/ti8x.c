@@ -48,16 +48,21 @@ static bool find_bytes(const uint8_t *buf, size_t len, const char *s, size_t sle
     return false;
 }
 
-ti8x_model_t ti8x_detect_model(const uint8_t *rom, size_t size) {
+ti8x_model_t ti8x_detect_model_boot(size_t size, const uint8_t *boot_page) {
     if (size >= 0x100000 && size < 0x124000) return TI8X_MODEL_84P;
     if (size >= 0x200000 && size < 0x224000) {
         /* Same test as TilEm: the 84+SE boot sector mentions "Operating".
          * BootFree (free boot code replacement) is only built for the 84+ family. */
-        if (find_bytes(rom + 0x1FC000, 0x4000, "Operating", 9) ||
-            find_bytes(rom + 0x1FC000, 0x4000, "BootFree", 8)) return TI8X_MODEL_84PSE;
+        if (find_bytes(boot_page, 0x4000, "Operating", 9) ||
+            find_bytes(boot_page, 0x4000, "BootFree", 8)) return TI8X_MODEL_84PSE;
         return TI8X_MODEL_83PSE;
     }
     return TI8X_MODEL_NONE;
+}
+
+ti8x_model_t ti8x_detect_model(const uint8_t *rom, size_t size) {
+    if (size < 0x100000) return TI8X_MODEL_NONE;
+    return ti8x_detect_model_boot(size, rom + (size >= 0x200000 ? 0x1FC000 : 0xFC000));
 }
 
 static inline const model_info_t *info(const ti8x_t *m) { return &models[m->model]; }
