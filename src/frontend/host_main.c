@@ -6,6 +6,7 @@
  *     -o FILE.ppm     screenshot at the end (default: none)
  *     -s FILE         save state at the end      -l FILE  load state first
  *     -t              print timing information
+ *     -m FILE         dump Flash then RAM (raw) at the end
  *   EVENTS: T:KEY presses KEY at time T (seconds) for 100 ms, e.g. 3.5:ENTER
  *           T:shot=FILE.ppm takes a screenshot at time T
  */
@@ -45,7 +46,7 @@ int main(int argc, char **argv) {
     }
     const char *rom_path = argv[1];
     double seconds = atof(argv[2]);
-    const char *out = NULL, *save = NULL, *load = NULL;
+    const char *out = NULL, *save = NULL, *load = NULL, *dump = NULL;
     bool timing = false;
     event_t ev[256];
     int nev = 0;
@@ -53,6 +54,7 @@ int main(int argc, char **argv) {
         if (!strcmp(argv[i], "-o") && i + 1 < argc) out = argv[++i];
         else if (!strcmp(argv[i], "-s") && i + 1 < argc) save = argv[++i];
         else if (!strcmp(argv[i], "-l") && i + 1 < argc) load = argv[++i];
+        else if (!strcmp(argv[i], "-m") && i + 1 < argc) dump = argv[++i];
         else if (!strcmp(argv[i], "-t")) timing = true;
         else if (strchr(argv[i], ':') && nev < 256) {
             char *c = strchr(argv[i], ':');
@@ -116,6 +118,10 @@ int main(int argc, char **argv) {
         FILE *sf = fopen(save, "wb");
         if (!sf || !ti8x_save_state(&m, sf)) fprintf(stderr, "could not save state\n");
         if (sf) fclose(sf);
+    }
+    if (dump) {
+        FILE *df = fopen(dump, "wb");
+        if (df) { fwrite(m.mem, 0x4000, m.flash_pages + m.ram_pages, df); fclose(df); }
     }
     ti8x_free(&m);
     return 0;
