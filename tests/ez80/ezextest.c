@@ -45,7 +45,7 @@ int main(int argc, char **argv) {
 
     static ez80_t z;
     ez80_init(&z);
-    for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { z.rd[i] = z.wr[i] = NULL; z.cost[i] = 1; }
+    for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { z.rd[i] = z.wr[i] = NULL; z.cost[i] = z.wcost[i] = 1; }
     for (unsigned i = 0; i < 16; i++) z.rd[i] = z.wr[i] = mem + i * EZ80_PAGE_SIZE;
     z.ctx = &z; z.read_slow = rslow; z.write_slow = wslow; z.port_in = pin; z.port_out = pout;
     z.pc = 0x100; z.sps = 0xF000;

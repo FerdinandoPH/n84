@@ -51,7 +51,7 @@ static ALWAYS_INLINE uint8_t f_mrd(ez80_t *z, fc_t *c, uint32_t a) {
 }
 static ALWAYS_INLINE void f_mwr(ez80_t *z, fc_t *c, uint32_t a, uint8_t v) {
     unsigned pg = a >> EZ80_PAGE_SHIFT;
-    c->cyc += z->cost[pg];
+    c->cyc += z->wcost[pg];
     uint8_t *p = z->wr[pg];
     if (likely(p != NULL)) p[a & EZ80_PAGE_MASK] = v;
     else f_mwr_slow(z, c, a, v);

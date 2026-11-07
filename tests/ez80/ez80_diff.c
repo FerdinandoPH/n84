@@ -35,10 +35,11 @@ static void pout_a(void *c, uint16_t p, uint8_t v) { (void)c; port_log_a = port_
 static void pout_b(void *c, uint16_t p, uint8_t v) { (void)c; port_log_b = port_log_b * 37 + p + v; }
 
 static void map(ez80_t *z, uint8_t *ram, bool a) {
-    for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { z->rd[i] = z->wr[i] = NULL; z->cost[i] = 2; }
+    for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { z->rd[i] = z->wr[i] = NULL; z->cost[i] = z->wcost[i] = 2; }
     for (unsigned i = 0; i < RAM_SIZE / EZ80_PAGE_SIZE; i++) {
         z->rd[0xD00 + i] = z->wr[0xD00 + i] = ram + i * EZ80_PAGE_SIZE;
         z->cost[0xD00 + i] = (uint8_t)(1 + (i & 3));
+        z->wcost[0xD00 + i] = (uint8_t)(1 + ((i + 1) & 3));
     }
     z->ctx = z;
     z->read_slow = rslow;

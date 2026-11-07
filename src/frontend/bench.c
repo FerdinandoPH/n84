@@ -174,7 +174,7 @@ int main(int argc, char **argv) {
             0xC9,                     /* 31 ret                 */
         };
         ez80_init(&e);
-        for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { e.rd[i] = e.wr[i] = NULL; e.cost[i] = 3; }
+        for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { e.rd[i] = e.wr[i] = NULL; e.cost[i] = e.wcost[i] = 3; }
         for (unsigned i = 0; i < 16; i++) e.rd[0xD00 + i] = e.wr[0xD00 + i] = mem + i * EZ80_PAGE_SIZE;
         memset(mem, 0, sizeof mem);
         memcpy(mem, prog, sizeof prog);

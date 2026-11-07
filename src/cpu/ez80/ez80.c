@@ -59,7 +59,7 @@ static ALWAYS_INLINE uint8_t mem_rd(ez80_t *z, uint32_t a) {
 }
 static ALWAYS_INLINE void mem_wr(ez80_t *z, uint32_t a, uint8_t v) {
     unsigned pg = a >> EZ80_PAGE_SHIFT;
-    z->cycles += z->cost[pg];
+    z->cycles += z->wcost[pg];
     uint8_t *p = z->wr[pg];
     if (likely(p != NULL)) p[a & EZ80_PAGE_MASK] = v;
     else mem_wr_slow(z, a, v);
@@ -968,6 +968,7 @@ static void run_z80(ez80_t *z) { run_mode(z, 0); }
 
 void ez80_init(ez80_t *z) {
     if (!tables_ready) init_tables();
+    for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) z->cost[i] = z->wcost[i] = 1;
     ez80_reset(z);
 }
 
@@ -1014,9 +1015,7 @@ void ez80_step(ez80_t *z) {
     if (z->adl) exec_adl(z); else exec_z80(z);
 }
 
-int32_t ez80_run(ez80_t *z, int32_t n) {
-    z->cycles = 0;
-    z->cycle_target = n;
+void ez80_execute(ez80_t *z) {
     while (z->cycles < z->cycle_target) {
         if (z->nmi_pending || (z->irq_line && z->iff1 && !z->ei_delay)) take_interrupt(z);
         z->ei_delay = 0;
@@ -1026,6 +1025,12 @@ int32_t ez80_run(ez80_t *z, int32_t n) {
         }
         if (z->adl) run_adl(z); else run_z80(z);
     }
+}
+
+int32_t ez80_run(ez80_t *z, int32_t n) {
+    z->cycles = 0;
+    z->cycle_target = n;
+    ez80_execute(z);
     z->total_cycles += (uint64_t)z->cycles;
     return z->cycles;
 }

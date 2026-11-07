@@ -15,13 +15,14 @@ CORE_EZ80 := src/cpu/ez80/ez80.c
 TI8X      := src/machine/ti8x/ti8x.c
 PLAT_HOST := src/platform/host/plat_host.c
 VIEW_TI8X := src/frontend/ti8x_view.c
-HDRS      := $(wildcard src/*/*.h src/*/*/*.h src/*/*/*.inc)
+CE_SRC    := $(wildcard src/machine/ce/*.c)
+HDRS      := $(wildcard src/*/*.h src/*/*/*.h src/*/*/*/*.h src/*/*/*.inc)
 
 .PHONY: all host test test-full rom-smoke nspire clean
 
 all: host
 
-host: $(HB)/zextest $(HB)/ezextest $(HB)/ez80_adl_test $(HB)/ez80_diff $(HB)/bench $(HB)/ti8x_test $(HB)/n84-host
+host: $(HB)/zextest $(HB)/ezextest $(HB)/ez80_adl_test $(HB)/ez80_diff $(HB)/bench $(HB)/ti8x_test $(HB)/n84-host $(HB)/n84ce-host
 
 $(HB)/zextest: tests/z80/zextest.c $(CORE_Z80) $(HDRS)
 	@mkdir -p $(dir $@)
@@ -51,6 +52,10 @@ $(HB)/n84-host: src/frontend/host_main.c $(CORE_Z80) $(TI8X) $(VIEW_TI8X) $(PLAT
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -DTI8X_LOG=printf -o $@ $(filter %.c,$^)
 
+$(HB)/n84ce-host: src/frontend/ce_host_main.c $(CORE_EZ80) $(CE_SRC) $(PLAT_HOST) $(HDRS)
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Isrc/machine/ce -DCE_LOG=printf -o $@ $(filter %.c,$^)
+
 $(BUILD)/ti84p_test.rom: tools/mk_ti8x_testrom.py
 	@mkdir -p $(dir $@)
 	python3 tools/mk_ti8x_testrom.py $@
@@ -71,7 +76,7 @@ test-full: test
 	$(HB)/zextest tests/z80/zexall.com | tee $(BUILD)/zexall.log
 	@! grep -q "ERROR" $(BUILD)/zexall.log
 
-rom-smoke: $(HB)/n84-host
+rom-smoke: $(HB)/n84-host $(HB)/n84ce-host
 	tools/rom_smoke.sh $(ROM)
 
 nspire:

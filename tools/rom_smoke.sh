@@ -20,3 +20,17 @@ for f in calc graph; do
     echo "$f: $((n - 21504)) dark LCD pixels"
 done
 echo "ROM smoke OK (screenshots in $OUT)"
+
+# TI-84 Plus CE
+CEROM=${2:-roms/ti84ce.rom}
+CEHOST=build/host/n84ce-host
+if [ -f "$CEROM" ] && [ -x "$CEHOST" ]; then
+    $CEHOST "$CEROM" 9 -t -o $OUT/ce_calc.ppm 5:CLEAR 5.5:2 5.8:ADD 6.1:3 6.4:MUL 6.7:7 7:ENTER 2>&1 >/dev/null | tail -1
+    $CEHOST "$CEROM" 14 -t -o $OUT/ce_graph.ppm 5:CLEAR 5.5:YEQU 6.2:SIN 6.6:XTTN 7:RPAREN 7.5:ZOOM 8.2:7 2>&1 >/dev/null | tail -1
+    for f in ce_calc ce_graph; do
+        n=$(tail -c +16 $OUT/$f.ppm | od -An -v -tu1 -w3 | awk '$1 < 100 {n++} END {print n+0}')
+        [ "$n" -gt 500 ] || { echo "FAIL: $f screen is blank"; exit 1; }
+        echo "$f: $n dark pixels"
+    done
+    echo "CE smoke OK"
+fi

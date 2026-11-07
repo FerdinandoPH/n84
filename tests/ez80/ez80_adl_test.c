@@ -24,7 +24,7 @@ static void setup(const uint8_t *code, size_t n, bool adl) {
     memset(ram, 0, sizeof ram);
     memcpy(ram, code, n);
     ez80_init(&z);
-    for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { z.rd[i] = z.wr[i] = NULL; z.cost[i] = 1; }
+    for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { z.rd[i] = z.wr[i] = NULL; z.cost[i] = z.wcost[i] = 1; }
     for (unsigned i = 0; i < sizeof ram / EZ80_PAGE_SIZE; i++)
         z.rd[0xD00 + i] = z.wr[0xD00 + i] = ram + i * EZ80_PAGE_SIZE;
     z.ctx = &z; z.read_slow = rslow; z.write_slow = wslow; z.port_in = pin; z.port_out = pout;

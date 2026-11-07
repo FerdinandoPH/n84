@@ -11,7 +11,8 @@
  *
  * Memory: 24-bit address space split in 4 KiB pages. rd/wr pointers give
  * direct access; NULL routes to read_slow/write_slow (MMIO, Flash commands,
- * unmapped areas). cost[] holds the cycles charged per access to each page.
+ * unmapped areas). cost[]/wcost[] hold the cycles charged per read/write
+ * access to each page (ez80_init sets both to 1).
  *
  * Host requirement: little-endian.
  */
@@ -62,7 +63,8 @@ struct ez80 {
     uint64_t total_cycles;
 
     /* memory map (cost first: keeps it within ARM immediate-offset range) */
-    uint8_t cost[EZ80_NUM_PAGES];
+    uint8_t cost[EZ80_NUM_PAGES];       /* cycles per read (and fetch) */
+    uint8_t wcost[EZ80_NUM_PAGES];      /* cycles per write */
     uint8_t *rd[EZ80_NUM_PAGES];
     uint8_t *wr[EZ80_NUM_PAGES];
 
@@ -76,6 +78,10 @@ struct ez80 {
 void    ez80_init(ez80_t *z);
 void    ez80_reset(ez80_t *z);
 int32_t ez80_run(ez80_t *z, int32_t cycles);
+/* Run until z->cycles >= z->cycle_target without resetting z->cycles, for
+ * machines that use the counter as their clock (the TI-84 Plus CE). Callbacks
+ * may move cycle_target; a halted CPU skips straight to it. */
+void    ez80_execute(ez80_t *z);
 void    ez80_end_timeslice(ez80_t *z);
 void    ez80_nmi(ez80_t *z);
 /* Execute exactly one instruction (including prefixes); for tests/tracing. */
