@@ -37,12 +37,16 @@ static const keymap_entry_t default_map[] = {
     { PK_W, TK_SUB }, { PK_X, TK_XTTN }, { PK_Y, TK_1 }, { PK_Z, TK_2 },
 };
 
-void ti8x_keymap_apply(ti8x_t *m) {
-    bool down[0x41];
-    memset(down, 0, sizeof down);
+void ti8x_keymap_scan(bool down[0x41]) {
+    memset(down, 0, 0x41 * sizeof *down);
     for (size_t i = 0; i < sizeof default_map / sizeof *default_map; i++)
         if (plat_key_down((plat_key_t)default_map[i].pk)) down[default_map[i].tk] = true;
-    for (uint8_t k = 0; k < 0x40; k++)
+    if (plat_on_down()) down[TK_ON] = true;
+}
+
+void ti8x_keymap_apply(ti8x_t *m) {
+    bool down[0x41];
+    ti8x_keymap_scan(down);
+    for (uint8_t k = 0; k < 0x41; k++)
         ti8x_set_key(m, k, down[k]);
-    ti8x_set_key(m, TK_ON, down[TK_ON] || plat_on_down());
 }

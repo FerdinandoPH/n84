@@ -331,6 +331,60 @@ uint32_t ce_pc(void) { return cpu.z.pc; }
 uint64_t ce_total_cycles(void) { return sched_total_cycles(); }
 
 /* ======================================================================
+ * Save states
+ *
+ * Layout: "N84C", version, Flash size, then the CPU registers (the part of
+ * ez80_t before the page tables), N84 CPU extras, and each CEmu module's
+ * own save block, then the mem_state_t and RAM. Flash contents are not
+ * included: they are written back to the ROM file at the same time.
+ * ==================================================================== */
+
+#define CE_STATE_MAGIC   "N84C"
+#define CE_STATE_VERSION 1u
+
+bool ce_save_state(FILE *f) {
+    uint32_t hdr[2] = { CE_STATE_VERSION, mem.flash.size };
+    if (fwrite(CE_STATE_MAGIC, 4, 1, f) != 1 || fwrite(hdr, sizeof hdr, 1, f) != 1) return false;
+    if (fwrite(&asic, sizeof asic, 1, f) != 1) return false;
+    if (fwrite(&cpu.z, offsetof(ez80_t, cost), 1, f) != 1) return false;
+    if (fwrite(&cpu.seconds, sizeof cpu - offsetof(ce_cpu_t, seconds), 1, f) != 1) return false;
+    return backlight_save(f) && control_save(f) && flash_save(f) && intrpt_save(f) &&
+           keypad_save(f) && lcd_save(f) && watchdog_save(f) && protect_save(f) &&
+           rtc_save(f) && sha256_save(f) && gpt_save(f) && cxxx_save(f) && spi_save(f) &&
+           sched_save(f) &&
+           fwrite(&mem, sizeof mem, 1, f) == 1 &&
+           fwrite(mem.ram.block, SIZE_RAM, 1, f) == 1;
+}
+
+bool ce_load_state(FILE *f) {
+    char magic[4];
+    uint32_t hdr[2];
+    if (fread(magic, 4, 1, f) != 1 || memcmp(magic, CE_STATE_MAGIC, 4)) return false;
+    if (fread(hdr, sizeof hdr, 1, f) != 1 || hdr[0] != CE_STATE_VERSION || hdr[1] != mem.flash.size) return false;
+
+    /* everything below overwrites live state: on failure the caller resets */
+    if (fread(&asic, sizeof asic, 1, f) != 1) return false;
+    if (fread(&cpu.z, offsetof(ez80_t, cost), 1, f) != 1) return false;
+    if (fread(&cpu.seconds, sizeof cpu - offsetof(ce_cpu_t, seconds), 1, f) != 1) return false;
+    mem_state_t saved_ptrs = mem;
+    bool ok = backlight_restore(f) && control_restore(f) && flash_restore(f) && intrpt_restore(f) &&
+              keypad_restore(f) && lcd_restore(f) && watchdog_restore(f) && protect_restore(f) &&
+              rtc_restore(f) && sha256_restore(f) && gpt_restore(f) && cxxx_restore(f) &&
+              spi_restore(f) && sched_restore(f) &&
+              fread(&mem, sizeof mem, 1, f) == 1;
+    mem.flash.block = saved_ptrs.flash.block;
+    mem.flash.size = saved_ptrs.flash.size;
+    mem.ram.block = saved_ptrs.ram.block;
+    ok = ok && fread(mem.ram.block, SIZE_RAM, 1, f) == 1;
+    if (!ok) return false;
+    emu_set_lcd_callback(lcd_frame_cb, NULL);
+    lcd_update();
+    map_all();
+    cpu_restore_next();
+    return true;
+}
+
+/* ======================================================================
  * Frame conversion (after CEmu's emu_lcd_drawmem, producing RGB565)
  * ==================================================================== */
 

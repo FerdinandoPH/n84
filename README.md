@@ -14,9 +14,11 @@ Licencia GPLv3. Especificación en [docs/SPEC.md](docs/SPEC.md); viabilidad en [
 | F4 Ficheros y variantes Z80 | Pendiente |
 | F5 Núcleo eZ80 | ✅ Pasa ZEXDOC en modo Z80 (salvo los opcodes que en un eZ80 real provocan trap) y 30 tests propios de ADL, sufijos, MBASE y llamadas mixtas |
 | F7 Optimización eZ80 | ✅ Ruta rápida especializada por modo. Benchmark en la Firebird: **48,5 MHz equivalentes (101 % de una CE)**, antes ~20 MHz. Un test diferencial (`ez80_diff`) la compara con el decodificador genérico instrucción a instrucción |
-| F6, F8, F9 | Pendientes (siguiente: máquina TI-84 Plus CE en el host) |
+| F6 TI-84 Plus CE | ✅ En el PC: arranca el OS 5.3.0, calcula y grafica; guardar/cargar estado. Periféricos adaptados de CEmu (`src/machine/ce/README.md`). En la Nspire: `n84.tns` abre ROMs de 4 MB, **pendiente de probar** |
+| F8, F9 | Pendientes |
 
-Modelos Z80 soportados: TI-83 Plus SE, TI-84 Plus y TI-84 Plus SE. La TI-83 Plus "básica" (512 KB) se añadirá después.
+Modelos soportados: TI-83 Plus SE, TI-84 Plus, TI-84 Plus SE (Z80) y TI-84 Plus CE con flash paralela
+(revisiones anteriores a la M, boot < 5.3.6). La TI-83 Plus "básica" (512 KB) y las CE con flash serie se añadirán después.
 
 ## Compilar
 
@@ -61,6 +63,11 @@ Las letras A–Z van a la tecla de la 84 cuya función ALPHA es esa letra (A=MAT
 C=PRGM, …), así que `shift` + letra escribe la letra.
 
 ## Probar una ROM en el PC
+
+```sh
+build/host/n84ce-host ROMCE.rom 9 -t -o pantalla.ppm 5:CLEAR 5.5:2 7:ENTER   # TI-84 Plus CE
+```
+
 
 ```sh
 build/host/n84-host ROM.rom 10 -t -o pantalla.ppm 5.0:ENTER 6.0:shot=paso.ppm

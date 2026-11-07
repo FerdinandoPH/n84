@@ -2,7 +2,7 @@
  * N84 - headless host runner for TI-84 Plus CE ROMs (testing / debugging).
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- *   n84ce-host ROM SECONDS [-o FILE.ppm] [-t] [T:KEY | T:shot=FILE.ppm]...
+ *   n84ce-host ROM SECONDS [-o FILE.ppm] [-s STATE] [-l STATE] [-t] [T:KEY | T:shot=FILE.ppm]...
  * Keys use the TI-84 names (ENTER, 2ND, ON, ...); the CE key matrix is the
  * TI-84 one with the rows reversed.
  */
@@ -47,13 +47,15 @@ int main(int argc, char **argv) {
         return 2;
     }
     double seconds = atof(argv[2]);
-    const char *out = NULL;
+    const char *out = NULL, *save = NULL, *load = NULL;
     bool timing = false;
     event_t ev[256];
     int nev = 0;
     for (int i = 3; i < argc; i++) {
         if (!strcmp(argv[i], "-o") && i + 1 < argc) out = argv[++i];
         else if (!strcmp(argv[i], "-t")) timing = true;
+        else if (!strcmp(argv[i], "-s") && i + 1 < argc) save = argv[++i];
+        else if (!strcmp(argv[i], "-l") && i + 1 < argc) load = argv[++i];
         else if (strchr(argv[i], ':') && nev < 256) {
             char *c = strchr(argv[i], ':');
             ev[nev].t = atof(argv[i]);
@@ -73,6 +75,11 @@ int main(int argc, char **argv) {
     fclose(f);
     if (!ce_init(rom, size)) { fprintf(stderr, "unsupported ROM\n"); return 1; }
     free(rom);
+    if (load) {
+        FILE *sf = fopen(load, "rb");
+        if (!sf || !ce_load_state(sf)) { fprintf(stderr, "could not load state %s\n", load); return 1; }
+        fclose(sf);
+    }
     plat_video_init();
 
     long frames = (long)(seconds * 60 + 0.5);
@@ -111,6 +118,11 @@ int main(int argc, char **argv) {
                 cpu.z.bc.w, cpu.z.de.w, cpu.z.hl.w, cpu.z.ix.w, cpu.z.iy.w, cpu.z.mbase);
     }
     if (out) screenshot(out);
+    if (save) {
+        FILE *sf = fopen(save, "wb");
+        if (!sf || !ce_save_state(sf)) fprintf(stderr, "could not save state\n");
+        if (sf) fclose(sf);
+    }
     ce_free();
     return 0;
 }

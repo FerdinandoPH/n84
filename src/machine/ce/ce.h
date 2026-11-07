@@ -38,6 +38,11 @@ uint32_t ce_lcd_frames(void);
 const uint8_t *ce_flash(size_t *size);
 uint32_t ce_flash_generation(void);
 
+/* Save states (RAM and hardware state; Flash lives in the ROM file). A failed
+ * load leaves the machine inconsistent: call ce_reset() then. */
+bool ce_save_state(FILE *f);
+bool ce_load_state(FILE *f);
+
 /* Debugging */
 uint32_t ce_pc(void);
 uint64_t ce_total_cycles(void);
