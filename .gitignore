@@ -10,3 +10,4 @@ roms/
 n84bench.txt
 n84bench.log
 local.mk
+__pycache__/

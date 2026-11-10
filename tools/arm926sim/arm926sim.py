@@ -34,6 +34,8 @@ CPU_HZ = 396_000_000
 STACK_TOP = 0x0800_0000
 STACK_SIZE = 0x10_0000
 RET_MAGIC = 0x0000_F000           # return address that stops emulation
+HEAP_SIZE = 0x0300_0000           # mapped after the image for newlib's sbrk (ce.elf)
+BLOB_BASE = 0x0400_0000           # ROM / state images for --ce
 
 # ---------------------------------------------------------------------------
 # caches
@@ -178,9 +180,15 @@ class Sim:
                 end = (seg["p_vaddr"] + seg["p_memsz"] + 0xFFF) & ~0xFFF
                 self.uc.mem_map(base, end - base)
                 self.uc.mem_write(seg["p_vaddr"], seg.data())
+            image_end = 0
+            for seg in elf.iter_segments():
+                if seg["p_type"] == "PT_LOAD":
+                    image_end = max(image_end, (seg["p_vaddr"] + seg["p_memsz"] + 0xFFF) & ~0xFFF)
             for sym in elf.get_section_by_name(".symtab").iter_symbols():
                 if sym["st_info"]["type"] == "STT_FUNC":
                     self.syms[sym.name] = sym["st_value"]
+        self.uc.mem_map(image_end, HEAP_SIZE)
+        self.blob_next = BLOB_BASE
         self.funcs = sorted((a, n) for n, a in self.syms.items())
         self.uc.mem_map(STACK_TOP - STACK_SIZE, STACK_SIZE)
         self.uc.mem_map(RET_MAGIC & ~0xFFF, 0x1000)
@@ -193,9 +201,25 @@ class Sim:
         self.miss = miss
         self.profile = None
         self.stats = collections.Counter()
-        self.uc.hook_add(UC_HOOK_CODE, self._code)
-        if self.dcache:
-            self.uc.hook_add(UC_HOOK_MEM_READ, self._read)
+        self.hooks = []
+        self.set_timing(True)
+
+    def set_timing(self, on):
+        """The cycle model (per-instruction hooks) can be switched off to run
+        set-up code at full Unicorn speed."""
+        if on and not self.hooks:
+            self.hooks.append(self.uc.hook_add(UC_HOOK_CODE, self._code))
+            if self.dcache:
+                self.hooks.append(self.uc.hook_add(UC_HOOK_MEM_READ, self._read))
+        elif not on and self.hooks:
+            for h in self.hooks:
+                self.uc.hook_del(h)
+            self.hooks = []
+            self.prev = None
+        else:
+            return
+        # code translated before the change would keep the old hooks
+        self.uc.ctl_flush_tb()
 
     def _read(self, uc, access, addr, size, value, user):
         if not self.dcache.access(addr):
@@ -279,6 +303,15 @@ class Sim:
         v = uc.reg_read(U.UC_ARM_REG_R0)
         return v - (1 << 32) if v & 0x8000_0000 else v
 
+    def place(self, data):
+        """Copy a host file image into emulated memory; returns its address."""
+        addr = self.blob_next
+        size = (len(data) + 0xFFFF) & ~0xFFFF
+        self.uc.mem_map(addr, size)
+        self.uc.mem_write(addr, data)
+        self.blob_next += size
+        return addr
+
     def func_of(self, addr):
         name = "?"
         for a, n in self.funcs:
@@ -347,6 +380,121 @@ def run_arm_tests(sim):
         print(f"  {names[i]:14s} {per:5.1f}")
 
 
+def report_profile(sim, top):
+    by_func = collections.Counter()
+    for a, c in sim.profile.items():
+        by_func[sim.func_of(a)] += c
+    tot = sum(sim.profile.values())
+    print("  by function:")
+    for n, c in by_func.most_common(15):
+        print(f"    {100 * c / tot:5.1f}%  {n}")
+    if top:
+        print("  hottest instructions:")
+        for a, c in sim.profile.most_common(top):
+            print(f"    {100 * c / tot:5.1f}%  {a:08x}  {sim.info[a].text}")
+
+
+def ce_boot(sim, a):
+    """Load the ROM (and a state made by --prepare, if given) with the cycle model off."""
+    sim.set_timing(False)
+    rom_data = open(a.ce, "rb").read()
+    if not sim.call("sim_ce_init", sim.place(rom_data), len(rom_data)):
+        sys.exit("ce_init failed")
+    if a.state:
+        try:
+            flash = open(a.state + ".flash", "rb").read()
+            addr, size = flash_region(sim)
+            sim.uc.mem_write(addr, flash[:size])
+        except FileNotFoundError:
+            pass
+        st = open(a.state, "rb").read()
+        if not sim.call("sim_ce_load", sim.place(st), len(st)):
+            sys.exit(f"could not load {a.state} (states from the PC build are not portable; use --prepare)")
+
+
+def flash_region(sim):
+    """Host address and size of the CE Flash image inside the simulated N84."""
+    out = sim.place(b"\0" * 4)
+    addr = sim.call("sim_ce_flash", out) & 0xFFFFFFFF
+    return addr, int.from_bytes(sim.uc.mem_read(out, 4), "little")
+
+
+def save_ppm(sim, path):
+    px = sim.uc.mem_read(sim.call("sim_ce_frame") & 0xFFFFFFFF, 320 * 240 * 2)
+    out = bytearray()
+    for i in range(0, len(px), 2):
+        c = px[i] | px[i + 1] << 8
+        out += bytes(((c >> 11) << 3, (c >> 5 & 63) << 2, (c & 31) << 3))
+    with open(path, "wb") as f:
+        f.write(b"P6\n320 240\n255\n" + out)
+
+
+def prepare_ce(sim, a):
+    """Build a native (32-bit) CE state: run --seconds with events like
+    n84ce-host's (T:KEY taps for 0.1 s, T:KEY/S holds for S seconds, T:send=FILE, T:shot=FILE.ppm), then save."""
+    ce_boot(sim, a)
+    events = []
+    for e in a.events:
+        t, what = e.split(":", 1)
+        events.append((float(t), what))
+    strings = sim.place(b"\0" * 0x10000)
+    frames = int(a.seconds * 60 + 0.5)
+    for fr in range(frames):
+        t = fr / 60
+        for et, what in events:
+            if what.startswith("send="):
+                if et <= t < et + 1 / 60:
+                    data = open(what[5:], "rb").read()
+                    ok = sim.call("sim_ce_send", sim.place(data), len(data))
+                    print(f"send {what[5:]}: {'OK' if ok else 'FAILED'}", flush=True)
+            elif what.startswith("shot="):
+                if et <= t < et + 1 / 60:
+                    save_ppm(sim, what[5:])
+            else:
+                key, _, hold = what.partition("/")
+                for start, down in ((et, 1), (et + (float(hold) if hold else 0.1), 0)):
+                    if start <= t < start + 1 / 60:
+                        sim.uc.mem_write(strings, key.encode() + b"\0")
+                        if not sim.call("sim_ce_key", strings, down):
+                            sys.exit(f"unknown key {what}")
+        sim.call("sim_ce_run", 1, 0)
+    buf = sim.place(b"\0" * 0x200000)
+    n = sim.call("sim_ce_save", buf, 0x200000) & 0xFFFFFFFF
+    if not n:
+        sys.exit("could not save the state")
+    with open(a.prepare, "wb") as f:
+        f.write(bytes(sim.uc.mem_read(buf, n)))
+    addr, size = flash_region(sim)
+    with open(a.prepare + ".flash", "wb") as f:            # Flash is not in the state
+        f.write(bytes(sim.uc.mem_read(addr, size)))
+    print(f"saved {a.prepare} ({n} bytes) after {a.seconds:g} s")
+
+
+def run_ce(sim, a):
+    """Profile the CE machine from a saved state: speed as the frontend shows it
+    (emulated frames per real time), without the final blit to the screen."""
+    ce_boot(sim, a)
+    sim.call("sim_ce_run", a.warmup, a.draw)
+    sim.set_timing(True)
+    sim.call("sim_ce_run", 1, a.draw)              # warm the cache model
+    sim.profile = collections.Counter()
+    sim.stats = collections.Counter()
+    for c in (sim.icache, sim.dcache):
+        if c:
+            c.misses = c.accesses = 0
+    t0 = sim.t
+    emu = sim.call("sim_ce_run", a.frames, a.draw) & 0xFFFFFFFF
+    arm = sim.t - t0
+    real_s = arm / CPU_HZ
+    print(f"{a.frames} frames ({emu} CE cycles) in {arm} ARM cycles: "
+          f"{100 * a.frames / 60 / real_s:.0f}% speed, {arm / max(emu, 1):.2f} ARM cycles per CE cycle")
+    for nm, c in (("icache", sim.icache), ("dcache", sim.dcache)):
+        if c:
+            print(f"  {nm}: {c.misses} misses / {c.accesses} accesses "
+                  f"({c.misses * sim.miss / max(arm, 1) * 100:.1f}% of time)")
+    report_profile(sim, a.profile)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--elf", default="build/arm926sim/cores.elf")
@@ -362,8 +510,22 @@ def main():
     ap.add_argument("--placement", type=int, default=-1, help="eZ80 memory placement (-1 = all)")
     ap.add_argument("--policy", choices=("random", "lru"), default="random", help="cache replacement")
     ap.add_argument("--arm-tests", action="store_true", help="run the ARM pattern micro-benchmarks")
+    ap.add_argument("--ce", metavar="ROM", help="profile the CE machine (needs --elf build/arm926sim/ce.elf and --state)")
+    ap.add_argument("--state", help="CE state to start from (made by --prepare)")
+    ap.add_argument("--prepare", metavar="OUT", help="with --ce: run --seconds with the events and save a state")
+    ap.add_argument("--seconds", type=float, default=10, help="emulated seconds for --prepare")
+    ap.add_argument("events", nargs="*", help="--prepare events: T:KEY, T:KEY/HOLD, T:send=FILE, T:shot=FILE.ppm")
+    ap.add_argument("--frames", type=int, default=6, help="CE frames (1/60 s) to measure")
+    ap.add_argument("--warmup", type=int, default=1, help="CE frames to run before measuring")
+    ap.add_argument("--draw", type=int, default=0, help="convert every Nth frame to RGB565 (0 = never)")
     a = ap.parse_args()
     sim = Sim(a.elf, a.icache, a.dcache, a.miss, a.policy)
+    if a.ce and a.prepare:
+        prepare_ce(sim, a)
+        return 0
+    if a.ce:
+        run_ce(sim, a)
+        return 0
     if a.arm_tests:
         run_arm_tests(sim)
         return 0

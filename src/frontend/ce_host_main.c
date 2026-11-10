@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  *   n84ce-host ROM SECONDS [-o FILE.ppm] [-s STATE] [-l STATE] [-t] [T:KEY | T:shot=FILE.ppm]...
+ * -s also writes STATE.flash (Flash is not part of the state); -l reads it back if present.
  * Keys use the TI-84 names (ENTER, 2ND, ON, ...); the CE key matrix is the
  * TI-84 one with the rows reversed.
  */
@@ -79,6 +80,17 @@ int main(int argc, char **argv) {
     if (!ce_init(rom, size)) { fprintf(stderr, "unsupported ROM\n"); return 1; }
     free(rom);
     if (load) {
+        /* the state does not hold Flash (N84 writes it back to the ROM file),
+         * so -s saves it next to the state as STATE.flash */
+        char fpath[1024];
+        snprintf(fpath, sizeof fpath, "%s.flash", load);
+        FILE *ff = fopen(fpath, "rb");
+        if (ff) {
+            size_t fsize;
+            uint8_t *flash = (uint8_t *)ce_flash(&fsize);
+            if (fread(flash, 1, fsize, ff) != fsize) { fprintf(stderr, "short read %s\n", fpath); return 1; }
+            fclose(ff);
+        }
         FILE *sf = fopen(load, "rb");
         if (!sf || !ce_load_state(sf)) { fprintf(stderr, "could not load state %s\n", load); return 1; }
         fclose(sf);
@@ -131,6 +143,13 @@ int main(int argc, char **argv) {
         FILE *sf = fopen(save, "wb");
         if (!sf || !ce_save_state(sf)) fprintf(stderr, "could not save state\n");
         if (sf) fclose(sf);
+        char fpath[1024];
+        snprintf(fpath, sizeof fpath, "%s.flash", save);
+        size_t fsize;
+        const uint8_t *flash = ce_flash(&fsize);
+        FILE *ff = fopen(fpath, "wb");
+        if (!ff || fwrite(flash, 1, fsize, ff) != fsize) fprintf(stderr, "could not save %s\n", fpath);
+        if (ff) fclose(ff);
     }
     ce_free();
     return 0;
