@@ -929,39 +929,28 @@ static void run_adl(ez80_t *z) { exec(z); }
 static void run_z80(ez80_t *z) { exec(z); }
 #else
 #include "ez80_fast.inc"
-static ALWAYS_INLINE void exec_mode(ez80_t *z, const unsigned M) {
-    fc_t c = { z->pc, z->cycles, 0 };
-    if (exec_fast(z, &c, M)) { z->pc = c.pc; z->cycles = c.cyc; }
-    else exec(z);
-}
-static void exec_adl(ez80_t *z) { exec_mode(z, 1); }
-static void exec_z80(ez80_t *z) { exec_mode(z, 0); }
 
+#define M 1
+#define RUN_FN run_adl_fast
+#include "ez80_run.inc"
+#undef RUN_FN
+#undef M
+#define M 0
+#define RUN_FN run_z80_fast
+#include "ez80_run.inc"
+#undef RUN_FN
+#undef M
+#undef F_JUMP
+#undef FM
+#undef FADDR
+
+static void exec_adl(ez80_t *z) { run_adl_fast(z, true); }
+static void exec_z80(ez80_t *z) { run_z80_fast(z, true); }
 /* Run instructions in one mode until something needs the outer loop: the
  * cycle budget is spent, an interrupt may be taken, EI/HALT executed, or the
  * generic decoder changed the mode. */
-static ALWAYS_INLINE void run_mode(ez80_t *z, const unsigned M) {
-    /* brk starts set: the first instruction may be the one right after EI,
-     * and the interrupt check must happen once it has executed */
-    fc_t c = { z->pc, z->cycles, 1 };
-    for (;;) {
-        if (!exec_fast(z, &c, M)) {
-            z->pc = c.pc; z->cycles = c.cyc;
-            exec(z);
-            c.pc = z->pc; c.cyc = z->cycles;
-            if (z->adl != M) break;
-            c.brk = 1;
-        }
-        if (c.cyc >= z->cycle_target) break;
-        if (c.brk) {
-            c.brk = 0;
-            if (z->nmi_pending | (z->irq_line & z->iff1) | z->ei_delay | z->halted) break;
-        }
-    }
-    z->pc = c.pc; z->cycles = c.cyc;
-}
-static void run_adl(ez80_t *z) { run_mode(z, 1); }
-static void run_z80(ez80_t *z) { run_mode(z, 0); }
+static void run_adl(ez80_t *z) { run_adl_fast(z, false); }
+static void run_z80(ez80_t *z) { run_z80_fast(z, false); }
 #endif
 
 /* ---- public API -------------------------------------------------------------- */

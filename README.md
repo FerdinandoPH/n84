@@ -13,7 +13,7 @@ Licencia GPLv3. Especificación en [docs/SPEC.md](docs/SPEC.md); viabilidad en [
 | F3 TI-84+ en la Nspire | ✅ Funciona en la Firebird (cálculos básicos). Falta probarlo en la calculadora real |
 | F4 Ficheros y variantes Z80 | Pendiente |
 | F5 Núcleo eZ80 | ✅ Pasa ZEXDOC en modo Z80 (salvo los opcodes que en un eZ80 real provocan trap) y 30 tests propios de ADL, sufijos, MBASE y llamadas mixtas |
-| F7 Optimización eZ80 | ✅ Ruta rápida especializada por modo. Benchmark en la Firebird: **48,5 MHz equivalentes (101 % de una CE)**, antes ~20 MHz. Un test diferencial (`ez80_diff`) la compara con el decodificador genérico instrucción a instrucción |
+| F7 Optimización eZ80 | ✅ Ruta rápida especializada por modo, con caché de la página de código y despacho por tabla de etiquetas (`ez80_run.inc`). Benchmark en la **CX II real: 86 % de una CE** de media (75–101 % según cómo caigan los datos en la caché), antes 55 %. La Firebird da cifras ~1,8 veces optimistas; para comparar cambios sin la calculadora está `tools/arm926sim` (modelo de ciclos del ARM926). Un test diferencial (`ez80_diff`) compara la ruta rápida con el decodificador genérico instrucción a instrucción |
 | F6 TI-84 Plus CE | ✅ En el PC: arranca el OS 5.3.0, calcula y grafica; guardar/cargar estado. Periféricos adaptados de CEmu (`src/machine/ce/README.md`). En la Nspire: `n84.tns` abre ROMs de 4 MB, **pendiente de probar** |
 | F8, F9 | Pendientes |
 
