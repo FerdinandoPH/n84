@@ -12,7 +12,7 @@ cp roms/ti84ce.rom "$D/CE.rom.tns"
 {
     echo "wait 10"; echo "shot $D/shots/launcher.ppm"
     echo "tap ENTER"; echo "wait 420"; echo "tap QUESEXCL"; echo "wait 10"
-    for i in 1 2 3 4 5 6 7; do echo "tap DOWN"; echo "wait 6"; done
+    for i in 1 2 3 4 5 6 7 8; do echo "tap DOWN"; echo "wait 6"; done   # to "Exit to launcher"
     echo "tap ENTER"; echo "wait 40"; echo "shot $D/shots/back.ppm"; echo "end"
 } > "$D/script.txt"
 N84_DIR="$D" N84_SCRIPT="$D/script.txt" build/host/n84-ui

@@ -19,6 +19,7 @@
 #include "frontend/browser.h"
 
 #define FRAME_HZ 60u
+#define AUTO_MAX_SKIP 4u
 
 /* ----------------------------------------------------------------------
  * Machine interface
@@ -220,7 +221,7 @@ static void send_file(const machine_t *m, const char *path, const uint16_t *back
  * In-game menu
  * -------------------------------------------------------------------- */
 
-enum { M_RESUME, M_SEND, M_SAVE, M_LOAD, M_RESET, M_TURBO, M_FPS, M_LAUNCHER, M_QUIT, M_COUNT };
+enum { M_RESUME, M_SEND, M_SAVE, M_LOAD, M_RESET, M_TURBO, M_FPS, M_SKIP, M_LAUNCHER, M_QUIT, M_COUNT };
 
 typedef enum { ACT_RESUME, ACT_LAUNCHER, ACT_QUIT } menu_act_t;
 
@@ -230,10 +231,13 @@ static menu_act_t ingame_menu(const machine_t *m, const char *state_path, bool *
     m->release_keys();
     int sel = 0;
     for (;;) {
+        static const char *const skip_names[] = {
+            "Frameskip: auto", "Frameskip: off", "Frameskip: 1", "Frameskip: 2", "Frameskip: 3",
+        };
         const char *items[M_COUNT] = {
             "Resume", "Send file...", "Save state", "Load state", "Reset calculator",
             *turbo ? "Turbo: on" : "Turbo: off", config.show_fps ? "Show speed: on" : "Show speed: off",
-            "Exit to launcher", "Quit N84",
+            skip_names[config.frameskip + 1], "Exit to launcher", "Quit N84",
         };
         ui_list_t l = { m->name, items, NULL, M_COUNT, sel, NULL, NULL, backdrop };
         int r = ui_list(&l, NULL);
@@ -266,6 +270,7 @@ static menu_act_t ingame_menu(const machine_t *m, const char *state_path, bool *
             break;
         case M_TURBO: *turbo = !*turbo; break;
         case M_FPS: config.show_fps = !config.show_fps; config_save(); break;
+        case M_SKIP: config.frameskip = config.frameskip >= 3 ? -1 : config.frameskip + 1; config_save(); break;
         case M_LAUNCHER: return ACT_LAUNCHER;
         case M_QUIT: return ACT_QUIT;
         default: break;
@@ -342,6 +347,7 @@ session_result_t session_run(const char *rom_path) {
     menu_act_t act = ACT_RESUME;
     uint32_t t0 = plat_ticks(), frames = 0;
     uint32_t stat_t = t0, stat_emu = 0, stat_drawn = 0;
+    unsigned skipped = 0;              /* frames emulated since the last one drawn */
     unsigned fps = 0, speed = 0;
 
     ui_wait_release();
@@ -367,11 +373,18 @@ session_result_t session_run(const char *rom_path) {
         } else {
             uint32_t target = t0 + (uint32_t)((uint64_t)frames * PLAT_TICKS_PER_SEC / FRAME_HZ);
             int32_t ahead = (int32_t)(target - plat_ticks());
-            if (config.frameskip >= 0) draw = (frames % (unsigned)(config.frameskip + 1)) == 0;
+            if (config.frameskip >= 0) {
+                draw = skipped >= (unsigned)config.frameskip;
+            } else {
+                /* auto: skip drawing while behind real time (drawing costs as
+                 * much as several emulated frames), but show at least one
+                 * frame in AUTO_MAX_SKIP + 1 */
+                draw = ahead >= -(int32_t)(PLAT_TICKS_PER_SEC / FRAME_HZ) || skipped >= AUTO_MAX_SKIP;
+            }
             if (ahead > 0) plat_wait_until(target);
             else if (ahead < -(int32_t)(PLAT_TICKS_PER_SEC / 4)) { t0 = plat_ticks(); frames = 0; }
-            else if (config.frameskip < 0 && ahead < -(int32_t)(PLAT_TICKS_PER_SEC / FRAME_HZ)) draw = (frames % 2) == 0;
         }
+        skipped = draw ? 0 : skipped + 1;
         if (draw) {
             m.draw(fb);
             stat_drawn++;

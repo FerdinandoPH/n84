@@ -221,18 +221,30 @@ static void detect_flash_unlock(void) {
 
 /*
  * Busy-wait skipping. Programs wait for hardware in tight loops such as
- * KEYPADC's kb_Scan: "ld (hl),2 / xor a / cp (hl) / jr nz,$-1" on F50000h.
- * When the same instruction reads the same I/O address again, gets the same
- * value, and no register changed since the previous read (a few cycles ago),
- * the loop can only end when a hardware event changes that value, so the
- * clock jumps (in whole loop iterations) to just before the next scheduler
- * event. The program sees the same result; the host saves the iterations.
+ * KEYPADC's kb_Scan ("ld (hl),2 / xor a / cp (hl) / jr nz,$-1" on F50000h) or
+ * GRAPHX's buffer-swap wait, which reads LcdUpcurr and LcdLpbase (three
+ * addresses, several bytes each) until the LCD starts the new frame.
+ *
+ * Between two scheduler events every I/O register this code can see keeps its
+ * value. So when an instruction (same PC) reads the same I/O address again,
+ * gets the same value, all registers equal those of its previous read, and no
+ * event fired in between, the CPU is back in the same state and will repeat
+ * the same iteration until the next event. The clock then jumps (in whole
+ * iterations) to just before that event. The program sees the same result;
+ * the host saves the iterations. R advances by the same amount per iteration,
+ * so it is moved on too and the result matches running every iteration. The
+ * last few reads are remembered so that loops reading several registers are
+ * recognised too.
  */
+#define POLL_SLOTS      8
+#define POLL_MAX_PERIOD 256
 static struct {
     uint32_t addr, pc, regs[8];
     int32_t cycles;
-    uint8_t value;
-} poll;
+    uint32_t next_event;
+    uint8_t value, r;
+} poll[POLL_SLOTS];
+static unsigned poll_head;
 
 static void poll_regs(uint32_t *r) {
     r[0] = (uint32_t)cpu.z.a << 8 | cpu.z.f;
@@ -242,15 +254,31 @@ static void poll_regs(uint32_t *r) {
 
 static void poll_check(uint32_t a, uint8_t v) {
     uint32_t regs[8];
+    uint32_t next_event = sched_event_next_cycle();
     poll_regs(regs);
-    int32_t period = cpu.z.cycles - poll.cycles;
-    if (a == poll.addr && cpu.z.pc == poll.pc && v == poll.value && period > 0 && period <= 64
-        && !memcmp(regs, poll.regs, sizeof regs) && !cpu.signals) {
-        int32_t room = (int32_t)sched_event_next_cycle() - cpu.z.cycles - 1;
-        if (room > period) cpu.z.cycles += room / period * period;
+    unsigned slot = POLL_SLOTS;
+    for (unsigned i = 0; i < POLL_SLOTS; i++)
+        if (poll[i].addr == a && poll[i].pc == cpu.z.pc) { slot = i; break; }
+    if (slot < POLL_SLOTS) {
+        int32_t period = cpu.z.cycles - poll[slot].cycles;
+        if (v == poll[slot].value && period > 0 && period <= POLL_MAX_PERIOD &&
+            next_event == poll[slot].next_event && !cpu.signals &&
+            !memcmp(regs, poll[slot].regs, sizeof regs)) {
+            int32_t room = (int32_t)next_event - cpu.z.cycles - 1;
+            if (room > period) {
+                int32_t n = room / period;
+                cpu.z.cycles += n * period;
+                cpu.z.r = (uint8_t)(cpu.z.r + (uint8_t)(cpu.z.r - poll[slot].r) * (uint32_t)n);
+            }
+        }
+    } else {
+        slot = poll_head;
+        poll_head = (poll_head + 1) % POLL_SLOTS;
     }
-    poll.addr = a; poll.pc = cpu.z.pc; poll.value = v; poll.cycles = cpu.z.cycles;
-    memcpy(poll.regs, regs, sizeof regs);
+    poll[slot].addr = a; poll[slot].pc = cpu.z.pc; poll[slot].value = v;
+    poll[slot].cycles = cpu.z.cycles; poll[slot].next_event = sched_event_next_cycle();
+    poll[slot].r = cpu.z.r;
+    memcpy(poll[slot].regs, regs, sizeof regs);
 }
 
 static uint8_t ce_read_slow(void *ctx, uint32_t a) {
@@ -446,6 +474,19 @@ bool ce_lcd_render(uint16_t *out) {
         if (!swap) memcpy(o, s, n * 2);
         else for (size_t i = 0; i < n; i++) o[i] = (uint16_t)swap_rb565(s[i]);
         o += n;
+    } else if (mode == 3 && !bebo) {         /* 8 bpp palette (GRAPHX): pixels in byte order */
+        const uint16_t *pal = lcd.palettes[swap ? 1 : 0];
+        const uint32_t *w = lcd.data;
+        size_t words = (size_t)(lcd.data_end - lcd.data);
+        size_t n = (size_t)(end - o) / 4;
+        if (words < n) n = words;
+        uint32_t *o32 = (uint32_t *)o;       /* out is 4-byte aligned, as is each row of 4 */
+        for (size_t i = 0; i < n; i++) {
+            uint32_t word = w[i];
+            o32[2 * i]     = pal[word & 0xFF] | (uint32_t)pal[word >> 8 & 0xFF] << 16;
+            o32[2 * i + 1] = pal[word >> 16 & 0xFF] | (uint32_t)pal[word >> 24] << 16;
+        }
+        o += 4 * n;
     } else if (mode < 4) {                   /* 1/2/4/8 bpp palette */
         const uint16_t *pal = lcd.palettes[swap ? 1 : 0];
         unsigned bpp = 1u << mode, mask = (1u << bpp) - 1;
