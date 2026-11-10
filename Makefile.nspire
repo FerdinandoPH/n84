@@ -2,6 +2,11 @@
 # (e.g. export PATH=$HOME/Ndless/ndless-sdk/bin:$PATH).
 #   make -f Makefile.nspire           -> build/nspire/n84bench.tns
 #   make -f Makefile.nspire DEBUG=1   -> -O0 -g builds for gdb
+#
+# Optional local.mk (not committed) may set DEPLOY_DIR: every rebuilt .tns is
+# also copied there (e.g. the folder synced to the calculator).
+
+-include local.mk
 
 GCC     = nspire-gcc
 LD      = nspire-ld
@@ -26,7 +31,7 @@ N84_SRC    := src/frontend/main.c src/frontend/session.c src/frontend/launcher.c
               src/machine/ti8x/ti8x.c $(CE_SRC) $(COMMON_SRC)
 N84_OBJ    := $(patsubst src/%.c,$(BUILD)/%.o,$(N84_SRC))
 
-BENCH_SRC  := src/frontend/bench.c src/cpu/ez80/ez80.c $(COMMON_SRC)
+BENCH_SRC  := src/frontend/bench.c src/frontend/bench_arm.c src/cpu/ez80/ez80.c $(COMMON_SRC)
 BENCH_OBJ  := $(patsubst src/%.c,$(BUILD)/%.o,$(BENCH_SRC))
 
 .PHONY: all clean
@@ -46,6 +51,7 @@ $(BUILD)/%.tns: $(BUILD)/%.elf
 	$(GENZEHN) --input $< --output $@.zehn --name "$*" --240x320-support true
 	$(MAKEPRG) $@.zehn $@
 	rm -f $@.zehn
+	$(if $(DEPLOY_DIR),cp $@ "$(DEPLOY_DIR)/")
 
 clean:
 	rm -rf $(BUILD)

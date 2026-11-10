@@ -12,6 +12,8 @@
 #include "platform/platform.h"
 #include "cpu/z80/z80.h"
 #include "cpu/ez80/ez80.h"
+#include "frontend/bench_progs.h"
+#include "frontend/bench_arm.h"
 #ifdef N84_NSPIRE
 #include <os.h>
 #include <libndls.h>
@@ -29,33 +31,7 @@ static void step(const char *what) {
     if (f) { fprintf(f, "%s\n", what); fclose(f); }
 }
 
-/* Synthetic workload: table walk + call/ret + LDIR block copy (see tools/) */
-static const uint8_t bench_prog[] = {
-    0x31, 0xF0, 0xFF,       /* 0000 ld sp,FFF0h      */
-    0x06, 0x00,             /* 0003 ld b,0     outer */
-    0x21, 0x00, 0x80,       /* 0005 ld hl,8000h loop */
-    0x11, 0x00, 0x90,       /* 0008 ld de,9000h      */
-    0x7E,                   /* 000B ld a,(hl)        */
-    0x80,                   /* 000C add a,b          */
-    0x12,                   /* 000D ld (de),a        */
-    0x23,                   /* 000E inc hl           */
-    0xCD, 0x21, 0x00,       /* 000F call 0021h       */
-    0x10, 0xF1,             /* 0012 djnz 0005h       */
-    0x21, 0x00, 0x80,       /* 0014 ld hl,8000h      */
-    0x11, 0x00, 0xA0,       /* 0017 ld de,A000h      */
-    0x01, 0x40, 0x00,       /* 001A ld bc,64         */
-    0xED, 0xB0,             /* 001D ldir             */
-    0x18, 0xE2,             /* 001F jr 0003h         */
-    0xC5,                   /* 0021 push bc          */
-    0x4F,                   /* 0022 ld c,a           */
-    0xAF,                   /* 0023 xor a            */
-    0xCB, 0x11,             /* 0024 rl c             */
-    0x89,                   /* 0026 adc a,c          */
-    0xC1,                   /* 0027 pop bc           */
-    0xC9,                   /* 0028 ret              */
-};
-
-static char report[1024];
+static char report[4096];
 static size_t rlen;
 
 static void out(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -67,12 +43,6 @@ static void out(const char *fmt, ...) {
     va_end(ap);
     if (n > 0) rlen += (size_t)n < sizeof report - rlen ? (size_t)n : sizeof report - rlen - 1;
 }
-
-static void dummy_write(void *c, uint16_t a, uint8_t v) { (void)c; (void)a; (void)v; }
-static uint8_t dummy_in(void *c, uint16_t p) { (void)c; (void)p; return 0xff; }
-static void dummy_out(void *c, uint16_t p, uint8_t v) { (void)c; (void)p; (void)v; }
-static uint8_t ez_rslow(void *c, uint32_t a) { (void)c; (void)a; return 0xff; }
-static void ez_wslow(void *c, uint32_t a, uint8_t v) { (void)c; (void)a; (void)v; }
 
 int main(int argc, char **argv) {
     if (!plat_init(argc, argv)) return 1;
@@ -119,14 +89,37 @@ int main(int argc, char **argv) {
             out("blit: %lu fps\n", (unsigned long)(60ull * PLAT_TICKS_PER_SEC / (b1 - b0)));
     }
 
+#if defined(__arm__)
+    step("arm clock");
+    /* 1b. ARM clock: 32 independent ALU ops + SUBS + taken BNE = 36 cycles per
+     * iteration on the ARM926 (1 each, 3 for the branch). Confirms the CPU
+     * clock and the timer, so the emulator figures below can be read as ARM
+     * cycles per emulated instruction. */
+    {
+        uint32_t c0 = plat_ticks();
+        uint32_t n = 4000000;
+        __asm__ volatile(
+            "1:\n"
+            ".rept 8\n"
+            "add r4, r4, #1\n add r5, r5, #1\n add r6, r6, #1\n add r7, r7, #1\n"
+            ".endr\n"
+            "subs %0, %0, #1\n"
+            "bne 1b\n"
+            : "+r"(n) : : "r4", "r5", "r6", "r7", "cc");
+        uint32_t c1 = plat_ticks();
+        if (c1 != c0)
+            out("ARM: %lu MHz (36-cycle loop)\n",
+                (unsigned long)(4000000ull * 36 * PLAT_TICKS_PER_SEC / (c1 - c0) / 1000000u));
+    }
+    step("arm patterns");
+    bench_arm(out);
+#endif
+
     step("z80");
     /* 4. Z80 throughput */
     static uint8_t mem[0x10000];
     static z80_t z;
-    memcpy(mem, bench_prog, sizeof bench_prog);
-    z80_init(&z);
-    for (int i = 0; i < 4; i++) { z.rd[i] = mem + i * Z80_PAGE_SIZE; z.wr[i] = mem + i * Z80_PAGE_SIZE; }
-    z.ctx = &z; z.write_slow = dummy_write; z.port_in = dummy_in; z.port_out = dummy_out;
+    bench_setup_z80(&z, mem);
 
     uint32_t start = plat_ticks(), now;
     uint64_t cyc = 0;
@@ -142,54 +135,31 @@ int main(int argc, char **argv) {
     }
 
     step("ez80");
-    /* 5. eZ80 throughput: same loop in ADL mode (24-bit pointers) running from
-     * RAM at D00000, as CE programs do. Every memory access costs 3 cycles
-     * (CEmu: RAM ~2-4, cached flash 2-3), so the result is comparable with
-     * the real 48 MHz CPU. */
+    /* 5. eZ80 throughput: same loop in ADL mode (see bench_progs.h), once per
+     * memory placement */
     {
-        static ez80_t e;
-        static const uint8_t prog[] = {
-            0x31, 0x00, 0xF0, 0xD0,   /* 00 ld sp,D0F000h       */
-            0x06, 0x00,               /* 04 ld b,0        outer */
-            0x21, 0x00, 0x80, 0xD0,   /* 06 ld hl,D08000h loop  */
-            0x11, 0x00, 0x90, 0xD0,   /* 0A ld de,D09000h       */
-            0x7E,                     /* 0E ld a,(hl)           */
-            0x80,                     /* 0F add a,b             */
-            0x12,                     /* 10 ld (de),a           */
-            0x23,                     /* 11 inc hl              */
-            0xCD, 0x2A, 0x00, 0xD0,   /* 12 call D0002Ah        */
-            0x10, 0xEE,               /* 16 djnz 06h            */
-            0x21, 0x00, 0x80, 0xD0,   /* 18 ld hl,D08000h       */
-            0x11, 0x00, 0xA0, 0xD0,   /* 1C ld de,D0A000h       */
-            0x01, 0x40, 0x00, 0x00,   /* 20 ld bc,64            */
-            0xED, 0xB0,               /* 24 ldir                */
-            0x18, 0xDC,               /* 26 jr 04h              */
-            0x00, 0x00,               /* 28 (pad)               */
-            0xC5,                     /* 2A push bc             */
-            0x4F,                     /* 2B ld c,a              */
-            0xAF,                     /* 2C xor a               */
-            0xCB, 0x11,               /* 2D rl c                */
-            0x89,                     /* 2F adc a,c             */
-            0xC1,                     /* 30 pop bc              */
-            0xC9,                     /* 31 ret                 */
-        };
-        ez80_init(&e);
-        for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) { e.rd[i] = e.wr[i] = NULL; e.cost[i] = e.wcost[i] = 3; }
-        for (unsigned i = 0; i < 16; i++) e.rd[0xD00 + i] = e.wr[0xD00 + i] = mem + i * EZ80_PAGE_SIZE;
-        memset(mem, 0, sizeof mem);
-        memcpy(mem, prog, sizeof prog);
-        e.ctx = &e; e.read_slow = ez_rslow; e.write_slow = ez_wslow; e.port_in = dummy_in; e.port_out = dummy_out;
-        e.adl = 1; e.pc = 0xD00000;
-        uint32_t s0 = plat_ticks(), s1;
-        uint64_t ecyc = 0;
-        do {
-            ecyc += (uint64_t)ez80_run(&e, 100000);
-            s1 = plat_ticks();
-        } while (s1 - s0 < 2 * PLAT_TICKS_PER_SEC && ecyc < 20000000000ull);
-        if (s1 != s0) {
+        static uint8_t mem_arena[0x10000 + BENCH_ARENA_ALIGN] __attribute__((aligned(BENCH_ARENA_ALIGN)));
+        static uint8_t cpu_arena[sizeof(ez80_t) + BENCH_ARENA_ALIGN] __attribute__((aligned(BENCH_ARENA_ALIGN)));
+        unsigned long best = 0, worst = ~0ul, sum = 0;
+        out("eZ80 %% per placement:");
+        for (unsigned pl = 0; pl < BENCH_PLACEMENTS; pl++) {
+            ez80_t *e = (ez80_t *)(cpu_arena + bench_placements[pl][1]);
+            bench_setup_ez80(e, mem_arena + bench_placements[pl][0]);
+            uint32_t s0 = plat_ticks(), s1;
+            uint64_t ecyc = 0;
+            do {
+                ecyc += (uint64_t)ez80_run(e, 100000);
+                s1 = plat_ticks();
+            } while (s1 - s0 < PLAT_TICKS_PER_SEC / 2);
             unsigned long khz = (unsigned long)(ecyc * PLAT_TICKS_PER_SEC / (s1 - s0) / 1000u);
-            out("eZ80: %lu.%02lu MHz equiv (%lu%% of 48MHz)\n", khz / 1000, (khz % 1000) / 10, khz / 480);
+            out(" %lu", khz / 480);
+            if (khz > best) best = khz;
+            if (khz < worst) worst = khz;
+            sum += khz;
         }
+        unsigned long avg = sum / BENCH_PLACEMENTS;
+        out("\neZ80: %lu.%02lu MHz equiv (%lu%% of 48MHz; %lu-%lu%%)\n", avg / 1000, (avg % 1000) / 10,
+            avg / 480, worst / 480, best / 480);
     }
 
     step("lcd shutdown");
