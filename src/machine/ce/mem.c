@@ -44,7 +44,7 @@ void mem_init(void) {
     mem.flash.sector[1].ipb = 0;
 
     /* Allocate RAM */
-    mem.ram.block = (uint8_t*)calloc(SIZE_RAM, 1);
+    mem.ram.block = (uint8_t*)calloc(SIZE_RAM_HOST, 1);
 
     mem.flash.write = 0;
     mem.flash.command = FLASH_NO_COMMAND;

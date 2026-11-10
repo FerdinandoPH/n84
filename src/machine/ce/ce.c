@@ -190,10 +190,17 @@ static void map_all(void) {
     ez80_t *z = &cpu.z;
     flash_map.valid = false;
     map_flash();
+    /* C programs copy hot routines into the LCD cursor SRAM (E30800h-E30BFFh,
+     * no wait states): let the core fetch code there directly, at the 3 cycles
+     * per byte an MMIO read of that block costs. Data accesses still go
+     * through lcd_read/lcd_write. */
+    z->xpage = 0xE30;
+    z->xbase = (uintptr_t)lcd.crsrImageBytes - 0x800;
+    z->xcost = 3;
     for (uint32_t pg = 0xD00; pg < 0x1000; pg++) {
         uint32_t a = pg << EZ80_PAGE_SHIFT;
         uint32_t ram = a & 0x7FFFF;
-        if (pg < 0xE00 && ram + EZ80_PAGE_SIZE <= SIZE_RAM) {
+        if (pg < 0xE00 && ram + EZ80_PAGE_SIZE <= SIZE_RAM_HOST) {
             z->rd[pg] = z->wr[pg] = mem.ram.block + ram;
             z->cost[pg] = RAM_READ_COST;
             z->wcost[pg] = RAM_WRITE_COST;

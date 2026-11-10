@@ -10,6 +10,11 @@ extern "C" {
 #include <stdbool.h>
 
 #define SIZE_RAM              0x65800
+/* N84: the host block is rounded up to the core's 4 KiB pages, so the last
+ * RAM page (D65000h, only 800h bytes of real RAM) can be mapped directly
+ * instead of sending every access through the slow path. The padding behaves
+ * as RAM, where the real CE has unmapped space (noise on reads). */
+#define SIZE_RAM_HOST         0x66000
 #define SIZE_FLASH_MIN        0x400000
 #define SIZE_FLASH_MAX_PAR    0x800000
 #define SIZE_FLASH_MAX        0x2000000

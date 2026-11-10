@@ -958,6 +958,7 @@ static void run_z80(ez80_t *z) { run_z80_fast(z, false); }
 void ez80_init(ez80_t *z) {
     if (!tables_ready) init_tables();
     for (unsigned i = 0; i < EZ80_NUM_PAGES; i++) z->cost[i] = z->wcost[i] = 1;
+    z->xpage = EZ80_NO_XPAGE;
     ez80_reset(z);
 }
 

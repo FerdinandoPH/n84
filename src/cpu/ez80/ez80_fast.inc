@@ -76,7 +76,13 @@ static ALWAYS_INLINE void f_mwr(ez80_t *z, fc_t *c, uint32_t a, uint8_t v) {
 /* Load page pg into the code cache; false if it has no direct pointer. */
 static ALWAYS_INLINE bool f_crefill(ez80_t *z, fc_t *c, uint32_t pg) {
     const uint8_t *p = z->rd[pg];
-    if (unlikely(p == NULL)) return false;
+    if (unlikely(p == NULL)) {
+        if (pg != z->xpage) return false;
+        c->fbase = z->xbase - ((uintptr_t)pg << EZ80_PAGE_SHIFT);   /* code-only page */
+        c->fpg = pg;
+        c->fcost = z->xcost;
+        return true;
+    }
     c->fbase = (uintptr_t)p - ((uintptr_t)pg << EZ80_PAGE_SHIFT);
     c->fpg = pg;
     c->fcost = z->cost[pg];
@@ -249,17 +255,62 @@ static ALWAYS_INLINE bool fast_ed(ez80_t *z, fc_t *c, uint32_t pc0, const unsign
     uint32_t ow, opw, nwd;
     switch (op) {
     case 0xA0: case 0xA8: case 0xB0: case 0xB8: {               /* LDI LDD LDIR LDDR */
-        f_skip(z, c, pc0, 2, M);
-        c->r += 2;
+        /* LDIR/LDDR repeat here instead of going back through the
+         * dispatcher: each iteration charges what re-executing ED B0/B8
+         * would (opcode fetch, R, read, write, 1 cycle), and the loop stops
+         * where the dispatcher would leave (budget spent or a slow access,
+         * which sets tgt to FC_BRK), with PC back on the instruction. */
         int delta = (op & 8) ? -1 : 1;
-        f_mwr(z, c, FADDR(z->de.w), f_mrd(z, c, FADDR(z->hl.w)));
-        z->de.w = FM(z->de.w + (uint32_t)delta);
-        z->hl.w = FM(z->hl.w + (uint32_t)delta);
-        uint32_t bc = FM(z->bc.w - 1);
-        if (M) z->bc.w = bc; else z->bc.s = (uint16_t)bc;
+        bool rep = op & 0x10;
+        uint32_t bc;
+        for (;;) {
+            uint32_t src = FADDR(z->hl.w), dst = FADDR(z->de.w);
+            const uint8_t *sp = z->rd[src >> EZ80_PAGE_SHIFT];
+            uint8_t *dp = z->wr[dst >> EZ80_PAGE_SHIFT];
+            bc = FM(z->bc.w);
+            if (rep && bc > 1 && sp && dp && (pc0 >> EZ80_PAGE_SHIFT) == c->fpg &&
+                ((pc0 + 1) >> EZ80_PAGE_SHIFT) == c->fpg && c->cyc < c->tgt) {
+                /* run of iterations inside one source and one destination
+                 * page: copy byte by byte (overlap gives the same pattern
+                 * fills as the real CPU) with the cost per byte fixed */
+                uint32_t so = src & EZ80_PAGE_MASK, d_o = dst & EZ80_PAGE_MASK;
+                uint32_t n = delta > 0 ? EZ80_PAGE_SIZE - (so > d_o ? so : d_o)
+                                       : (so < d_o ? so : d_o) + 1;
+                if (n > bc - 1) n = bc - 1;               /* the last one goes below */
+                int32_t per = 2 * c->fcost + z->cost[src >> EZ80_PAGE_SHIFT] +
+                              z->wcost[dst >> EZ80_PAGE_SHIFT] + 1;
+                if (per > 0) {
+                    uint32_t room = (uint32_t)(c->tgt - c->cyc + per - 1) / (uint32_t)per;
+                    if (n > room) n = room;
+                }
+                if (n) {
+                    sp += so; dp += d_o;
+                    if (delta > 0) for (uint32_t i = 0; i < n; i++) dp[i] = sp[i];
+                    else for (uint32_t i = 0; i < n; i++) *(dp - i) = *(sp - i);
+                    uint32_t d = delta > 0 ? n : (uint32_t)-(int32_t)n;
+                    z->hl.w = FM(z->hl.w + d);
+                    z->de.w = FM(z->de.w + d);
+                    bc -= n;
+                    if (M) z->bc.w = bc; else z->bc.s = (uint16_t)bc;
+                    c->r += 2 * n;
+                    c->cyc += (int32_t)n * per;
+                    if (c->cyc >= c->tgt) break;
+                    continue;
+                }
+            }
+            f_skip(z, c, pc0, 2, M);
+            c->r += 2;
+            f_mwr(z, c, FADDR(z->de.w), f_mrd(z, c, FADDR(z->hl.w)));
+            z->de.w = FM(z->de.w + (uint32_t)delta);
+            z->hl.w = FM(z->hl.w + (uint32_t)delta);
+            bc = FM(z->bc.w - 1);
+            if (M) z->bc.w = bc; else z->bc.s = (uint16_t)bc;
+            c->cyc++;
+            if (!rep || !bc || c->cyc >= c->tgt) break;
+        }
         z->f = (uint8_t)((z->f & ~(HF | NF | PF)) | (bc ? PF : 0));
-        c->cyc++;
-        if ((op & 0x10) && bc) c->pc = pc0;                     /* repeat */
+        if (rep && bc) c->pc = pc0;                             /* not finished */
+        else c->pc = FADDR(pc0 + 2);
         return true;
     }
     case 0x4C: case 0x5C: case 0x6C:                            /* MLT BC/DE/HL */
@@ -333,7 +384,11 @@ static ALWAYS_INLINE bool fast_ed(ez80_t *z, fc_t *c, uint32_t pc0, const unsign
 
 /* DD/FD xx: IX/IY forms; invalid combinations (traps) and rare ones go to the
  * generic decoder. `xy` is the selected index register, `oxy` the other one. */
-static ALWAYS_INLINE bool fast_xy(ez80_t *z, fc_t *c, uint32_t pc0, ez80_pair *xy, ez80_pair *oxy, const unsigned M) {
+/* Not inlined: one copy per mode serves both DD and FD. Inlined it doubled
+ * the dispatcher (~100 KB per mode) and OS code (e.g. graphing) spent ~30% of
+ * its time on I-cache misses (16 KB on the ARM926); out of line, the
+ * arm926sim model is faster for the OS and games alike. */
+static NOINLINE bool fast_xy(ez80_t *z, fc_t *c, uint32_t pc0, ez80_pair *xy, ez80_pair *oxy, const unsigned M) {
     int op = f_peek(z, c, FADDR(pc0 + 1));
     int d;
     uint32_t a, ow, opw, nwd;

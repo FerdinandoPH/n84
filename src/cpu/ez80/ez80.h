@@ -26,6 +26,7 @@
 #define EZ80_PAGE_SIZE  (1u << EZ80_PAGE_SHIFT)
 #define EZ80_PAGE_MASK  (EZ80_PAGE_SIZE - 1)
 #define EZ80_NUM_PAGES  (1u << (24 - EZ80_PAGE_SHIFT))
+#define EZ80_NO_XPAGE   0xFFFFFFFFu
 
 enum {
     EZ80_CF = 0x01, EZ80_NF = 0x02, EZ80_PF = 0x04, EZ80_XF = 0x08,
@@ -67,6 +68,15 @@ struct ez80 {
     uint8_t wcost[EZ80_NUM_PAGES];      /* cycles per write */
     uint8_t *rd[EZ80_NUM_PAGES];
     uint8_t *wr[EZ80_NUM_PAGES];
+
+    /* One page whose code may be fetched directly although its data
+     * accesses go through read_slow/write_slow (on the CE, the LCD cursor
+     * SRAM that C programs copy fast routines into): xbase is the host
+     * address of the page's first byte, xcost the cycles per fetched byte.
+     * xpage = EZ80_NO_XPAGE disables it. */
+    uint32_t xpage;
+    uintptr_t xbase;
+    uint8_t xcost;
 
     void *ctx;
     uint8_t (*read_slow)(void *ctx, uint32_t addr);
