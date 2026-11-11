@@ -1,5 +1,5 @@
 /*
- * N84 - benchmark workloads, shared by n84bench and tools/arm926sim
+ * N84 - benchmark workloads for n84bench
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Synthetic loop: table walk + call/ret + LDIR block copy. The Z80 version

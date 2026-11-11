@@ -1,5 +1,5 @@
 /*
- * N84 - phase 0 diagnostic and benchmark (docs/SPEC.md, phase F0)
+ * N84 - diagnostic and benchmark (n84bench.tns)
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Checks the platform layer (timer, LCD, big allocations) and measures raw Z80
@@ -13,7 +13,6 @@
 #include "cpu/z80/z80.h"
 #include "cpu/ez80/ez80.h"
 #include "frontend/bench_progs.h"
-#include "frontend/bench_arm.h"
 #ifdef N84_NSPIRE
 #include <os.h>
 #include <libndls.h>
@@ -111,8 +110,6 @@ int main(int argc, char **argv) {
             out("ARM: %lu MHz (36-cycle loop)\n",
                 (unsigned long)(4000000ull * 36 * PLAT_TICKS_PER_SEC / (c1 - c0) / 1000000u));
     }
-    step("arm patterns");
-    bench_arm(out);
 #endif
 
     step("z80");

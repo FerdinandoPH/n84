@@ -165,8 +165,6 @@ int plat_menu3(const char *title, const char *msg, const char *b1, const char *b
     return 1;
 }
 
-void plat_register_ext(const char *ext, const char *prog) { (void)ext; (void)prog; }
-
 void plat_log(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);

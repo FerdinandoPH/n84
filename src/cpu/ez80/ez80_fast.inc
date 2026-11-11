@@ -386,8 +386,8 @@ static ALWAYS_INLINE bool fast_ed(ez80_t *z, fc_t *c, uint32_t pc0, const unsign
  * generic decoder. `xy` is the selected index register, `oxy` the other one. */
 /* Not inlined: one copy per mode serves both DD and FD. Inlined it doubled
  * the dispatcher (~100 KB per mode) and OS code (e.g. graphing) spent ~30% of
- * its time on I-cache misses (16 KB on the ARM926); out of line, the
- * arm926sim model is faster for the OS and games alike. */
+ * its time on I-cache misses (16 KB on the ARM926); out of line, an ARM926
+ * cycle model is faster for the OS and games alike. */
 static NOINLINE bool fast_xy(ez80_t *z, fc_t *c, uint32_t pc0, ez80_pair *xy, ez80_pair *oxy, const unsigned M) {
     int op = f_peek(z, c, FADDR(pc0 + 1));
     int d;

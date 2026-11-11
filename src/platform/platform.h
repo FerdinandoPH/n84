@@ -58,9 +58,6 @@ void     plat_wait_until(uint32_t tick);  /* idle until plat_ticks() >= tick */
 void     plat_msgbox(const char *title, const char *msg);
 /* Modal dialog with up to 3 buttons; returns the 1-based button chosen. */
 int      plat_menu3(const char *title, const char *msg, const char *b1, const char *b2, const char *b3);
-/* Register a file extension so opening "*.ext.tns" launches this program
- * (no-op on the host). */
-void     plat_register_ext(const char *ext, const char *prog);
 void     plat_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 /* Files: paths are given without the Nspire ".tns" suffix handling; the

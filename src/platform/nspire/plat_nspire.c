@@ -2,7 +2,7 @@
  * N84 - TI-Nspire (Ndless) platform layer
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * Design rule (see docs/SPEC.md RNF-02): no IRQ/vector/MMU tampering. We only
+ * Design rule: no IRQ/vector/MMU tampering. We only
  * use libndls APIs plus one SP804 timer half in polling mode, whose registers
  * are saved on init and restored on shutdown.
  */
@@ -156,8 +156,6 @@ int plat_menu3(const char *title, const char *msg, const char *b1, const char *b
     if (was) lcd_init(SCR_320x240_565);
     return r;
 }
-
-void plat_register_ext(const char *ext, const char *prog) { cfg_register_fileext(ext, prog); }
 
 void plat_log(const char *fmt, ...) {
     va_list ap;
