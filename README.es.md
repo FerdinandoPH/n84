@@ -12,14 +12,13 @@ calculadora.
 
 <table>
   <tr>
-    <td><img src="docs/start.gif" alt="Lanzador, pantalla principal y menú de N84" width="320"></td>
-    <td><img src="docs/graph.gif" alt="Gráfica de sin(X) en la TI-84 Plus CE" width="320"></td>
-    <td><img src="docs/geometry_dash.gif" alt="Un juego en la TI-84 Plus CE emulada" width="320"></td>
+    <td><img src="docs/start.gif" alt="El lanzador de N84 con la lista de ROMs, la pantalla principal de la TI-84 Plus CE haciendo cálculos y el menú de N84" width="320"></td>
+    <td><img src="docs/graph.gif" alt="Gráfica de sin(X) en la TI-84 Plus CE emulada" width="320"></td>
+    <td><img src="docs/geometry_dash.gif" alt="Partida de Geometry Dash CE en la TI-84 Plus CE emulada" width="320"></td>
   </tr>
   <tr>
-    <td align="center">Lanzador, pantalla principal y menú</td>
-    <td align="center">Una gráfica en la TI-84 Plus CE</td>
-    <td align="center">Un juego (Geometry Dash CE)</td>
+    <td><img src="docs/start_se.gif" alt="La TI-84 Plus SE arrancando desde el lanzador, haciendo cálculos y abriendo el menú de N84" width="320"></td>
+    <td colspan="2" align="center"><img src="docs/fnaf.gif" alt="Partida de Five Nights at Freddy's, un juego en escala de grises, en la TI-84 Plus SE emulada" width="320"></td>
   </tr>
 </table>
 

@@ -12,14 +12,13 @@ so you get the best of both worlds. It runs the real TI-OS from a ROM image of y
 
 <table>
   <tr>
-    <td><img src="docs/start.gif" alt="Launcher, home screen and N84 menu" width="320"></td>
-    <td><img src="docs/graph.gif" alt="Graphing sin(X) on the TI-84 Plus CE" width="320"></td>
-    <td><img src="docs/geometry_dash.gif" alt="A game running on the emulated TI-84 Plus CE" width="320"></td>
+    <td><img src="docs/start.gif" alt="The N84 launcher listing the ROMs, the TI-84 Plus CE home screen doing some math, and the N84 menu" width="320"></td>
+    <td><img src="docs/graph.gif" alt="Graphing sin(X) on the emulated TI-84 Plus CE" width="320"></td>
+    <td><img src="docs/geometry_dash.gif" alt="Playing Geometry Dash CE on the emulated TI-84 Plus CE" width="320"></td>
   </tr>
   <tr>
-    <td align="center">Launcher, home screen and menu</td>
-    <td align="center">Graphing on the TI-84 Plus CE</td>
-    <td align="center">A game (Geometry Dash CE)</td>
+    <td><img src="docs/start_se.gif" alt="Starting the TI-84 Plus SE from the launcher, doing some math and opening the N84 menu" width="320"></td>
+    <td colspan="2" align="center"><img src="docs/fnaf.gif" alt="Playing Five Nights at Freddy's, a grayscale game, on the emulated TI-84 Plus SE" width="320"></td>
   </tr>
 </table>
 
