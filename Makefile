@@ -6,11 +6,13 @@
 #   make clean
 
 HOST_CC     ?= gcc
+VERSION     ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 HOST_CFLAGS ?= -O2 -g -std=gnu11 -Wall -Wextra -Isrc
+HOST_CFLAGS += -DN84_VERSION='"$(VERSION)"'
 BUILD       := build
 HB          := $(BUILD)/host
 FRONTEND  := src/link/tivar.c src/machine/ti8x/ti8x_link.c src/frontend/browser.c src/frontend/main.c src/frontend/session.c src/frontend/launcher.c src/frontend/ui.c \
-             src/frontend/config.c src/frontend/keymap_ti8x.c src/frontend/ti8x_view.c
+             src/frontend/config.c src/frontend/keymap_ti8x.c src/frontend/keyguide.c src/frontend/ti8x_view.c
 
 CORE_Z80  := src/cpu/z80/z80.c
 CORE_EZ80 := src/cpu/ez80/ez80.c
@@ -24,7 +26,11 @@ HDRS      := $(wildcard src/*/*.h src/*/*/*.h src/*/*/*/*.h src/*/*/*.inc)
 
 all: host
 
-host: $(HB)/zextest $(HB)/ezextest $(HB)/ez80_adl_test $(HB)/ez80_diff $(HB)/bench $(HB)/ti8x_test $(HB)/n84-host $(HB)/n84ce-host $(HB)/n84-ui
+host: $(HB)/keymap_test $(HB)/zextest $(HB)/ezextest $(HB)/ez80_adl_test $(HB)/ez80_diff $(HB)/bench $(HB)/ti8x_test $(HB)/n84-host $(HB)/n84ce-host $(HB)/n84-ui
+
+$(HB)/keymap_test: tests/frontend/keymap_test.c src/frontend/keymap_ti8x.c $(TI8X) $(CORE_Z80) $(PLAT_HOST) $(HDRS)
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -o $@ $(filter %.c,$^)
 
 $(HB)/zextest: tests/z80/zextest.c $(CORE_Z80) $(HDRS)
 	@mkdir -p $(dir $@)
@@ -69,7 +75,8 @@ $(BUILD)/ti84p_test.rom: tools/mk_ti8x_testrom.py
 
 # ZEXDOC on the eZ80 skips tests 50, 59, 60: they use DD-prefixed non-index
 # opcodes and SLL, which trap on a real eZ80.
-test: $(HB)/zextest $(HB)/ezextest $(HB)/ez80_adl_test $(HB)/ez80_diff $(HB)/ti8x_test $(BUILD)/ti84p_test.rom
+test: $(HB)/keymap_test $(HB)/zextest $(HB)/ezextest $(HB)/ez80_adl_test $(HB)/ez80_diff $(HB)/ti8x_test $(BUILD)/ti84p_test.rom
+	$(HB)/keymap_test dist/n84.keys.tns
 	$(HB)/zextest tests/z80/zexdoc.com | tee $(BUILD)/zexdoc.log
 	@! grep -q "ERROR" $(BUILD)/zexdoc.log
 	$(HB)/ezextest tests/z80/zexdoc.com 50 59 60 | tee $(BUILD)/ezexdoc.log
@@ -88,7 +95,8 @@ rom-smoke: $(HB)/n84-host $(HB)/n84ce-host $(HB)/n84-ui
 	tests/ui/smoke.sh
 
 nspire:
-	$(MAKE) -f Makefile.nspire
+	$(MAKE) -f Makefile.nspire VERSION=$(VERSION)
+
 
 clean:
 	rm -rf $(BUILD)

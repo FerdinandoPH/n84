@@ -9,6 +9,7 @@
  */
 #include "platform/platform.h"
 #include "frontend/config.h"
+#include "frontend/keymap_ti8x.h"
 #include "frontend/launcher.h"
 #include "frontend/session.h"
 #include "frontend/ui.h"
@@ -17,6 +18,10 @@ int main(int argc, char **argv) {
     if (!plat_init(argc, argv)) return 1;
     config_load();
     if (!plat_video_init()) { plat_msgbox("N84", "LCD init failed."); plat_shutdown(); return 1; }
+
+    char path[300], err[96];
+    app_path(path, sizeof path, KEYMAP_FILE);
+    if (keymap_load(path, err, sizeof err) < 0) ui_message("Key file", err, NULL);
 
     char rom_path[300];
     bool direct = argc >= 2;

@@ -10,6 +10,7 @@
 #include "frontend/ui.h"
 #include "frontend/ti8x_view.h"
 #include "frontend/keymap_ti8x.h"
+#include "frontend/keyguide.h"
 #include "platform/platform.h"
 #include "machine/ti8x/ti8x.h"
 #include "machine/ce/ce.h"
@@ -221,7 +222,7 @@ static void send_file(const machine_t *m, const char *path, const uint16_t *back
  * In-game menu
  * -------------------------------------------------------------------- */
 
-enum { M_RESUME, M_SEND, M_SAVE, M_LOAD, M_RESET, M_TURBO, M_FPS, M_SKIP, M_LAUNCHER, M_QUIT, M_COUNT };
+enum { M_RESUME, M_SEND, M_SAVE, M_LOAD, M_KEYS, M_RESET, M_TURBO, M_FPS, M_SKIP, M_LAUNCHER, M_QUIT, M_COUNT };
 
 typedef enum { ACT_RESUME, ACT_LAUNCHER, ACT_QUIT } menu_act_t;
 
@@ -235,7 +236,7 @@ static menu_act_t ingame_menu(const machine_t *m, const char *state_path, bool *
             "Frameskip: auto", "Frameskip: off", "Frameskip: 1", "Frameskip: 2", "Frameskip: 3",
         };
         const char *items[M_COUNT] = {
-            "Resume", "Send file...", "Save state", "Load state", "Reset calculator",
+            "Resume", "Send file...", "Save state", "Load state", "Key guide", "Reset calculator",
             *turbo ? "Turbo: on" : "Turbo: off", config.show_fps ? "Show speed: on" : "Show speed: off",
             skip_names[config.frameskip + 1], "Exit to launcher", "Quit N84",
         };
@@ -262,6 +263,7 @@ static menu_act_t ingame_menu(const machine_t *m, const char *state_path, bool *
             if (lr < 0) return ACT_RESUME;
             break;
         }
+        case M_KEYS: keyguide_show(); break;
         case M_RESET:
             if (ui_confirm("Reset calculator", "Reset the emulated calculator? RAM contents will be lost (Archive is kept).", backdrop)) {
                 m->reset();
@@ -350,6 +352,17 @@ session_result_t session_run(const char *rom_path) {
     unsigned skipped = 0;              /* frames emulated since the last one drawn */
     unsigned fps = 0, speed = 0;
 
+    if (!config.welcome_done) {
+        ui_message("Welcome to N84",
+                   "Press ?!> (or ctrl+esc) at any time to open the N84 menu: "
+                   "key guide, send files, save state, speed settings and exit.\n\n"
+                   "Main keys: ctrl = 2ND, shift = ALPHA, esc = CLEAR. "
+                   "The key guide in the menu lists them all.", NULL);
+        config.welcome_done = true;
+        config_save();
+        ui_clear(UI_RGB(0, 0, 0));
+        if (m.draw == ti8x_draw_fb) ti8x_view_init(fb);
+    }
     ui_wait_release();
     while (act == ACT_RESUME) {
         plat_input_poll();

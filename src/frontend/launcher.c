@@ -11,6 +11,8 @@
 #include "frontend/session.h"
 #include "frontend/config.h"
 #include "frontend/ui.h"
+#include "frontend/keyguide.h"
+#include "frontend/version.h"
 #include "platform/platform.h"
 #include "machine/ti8x/ti8x.h"
 #include "machine/ce/bootver.h"
@@ -139,10 +141,12 @@ static void settings(void) {
 
 static void about(void) {
     ui_message("About N84",
-               "N84: TI-84 Plus / TI-84 Plus CE emulator for the TI-Nspire.\n"
+               "N84 " N84_VERSION " by FerdinandoPH\n"
+               "TI-83/84 Plus and TI-84 Plus CE emulator for the TI-Nspire CX II. "
                "GPLv3. CE hardware derived from CEmu.\n\n"
                "Put your ROM dumps (NAME.rom.tns) next to n84.tns. "
-               "In game, press ?!> for the menu.", NULL);
+               "In game, press ?!> (or ctrl+esc) for the menu. "
+               "Keys can be changed in n84.keys.tns.", NULL);
 }
 
 /* options for the highlighted ROM; returns true if it should be run */
@@ -151,13 +155,14 @@ static bool rom_options(rom_entry_t *r) {
         bool has_state = r && r->state_size >= 0;
         const char *items[8];
         int ids[8], n = 0;
-        enum { O_RUN, O_INFO, O_TRANSFER, O_DELSTATE, O_SETTINGS, O_ABOUT };
+        enum { O_RUN, O_INFO, O_TRANSFER, O_DELSTATE, O_KEYS, O_SETTINGS, O_ABOUT };
         if (r) {
             items[n] = "Run"; ids[n++] = O_RUN;
             items[n] = "Transfer files..."; ids[n++] = O_TRANSFER;
             items[n] = "Information"; ids[n++] = O_INFO;
         }
         if (r && has_state) { items[n] = "Delete saved state"; ids[n++] = O_DELSTATE; }
+        items[n] = "Key guide"; ids[n++] = O_KEYS;
         items[n] = "Settings"; ids[n++] = O_SETTINGS;
         items[n] = "About N84"; ids[n++] = O_ABOUT;
         ui_list_t l = { r ? r->name : "N84", items, NULL, n, 0, "enter: select   esc: back", NULL, NULL };
@@ -184,6 +189,7 @@ static bool rom_options(rom_entry_t *r) {
                 return false;
             }
             break;
+        case O_KEYS: keyguide_show(); break;
         case O_SETTINGS: settings(); break;
         case O_ABOUT: about(); break;
         }
