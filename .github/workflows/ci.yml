@@ -1,6 +1,6 @@
 # Tests on every push and pull request; calculator build (uploaded as an
-# artifact); on a tag "v*", the zip goes to its GitHub release (created as a
-# pre-release if it does not exist yet).
+# artifact); on a tag "v*", the zip goes to its GitHub release (created as the
+# latest release if it does not exist yet).
 name: CI
 
 on:
@@ -92,5 +92,5 @@ jobs:
             gh release upload "$VERSION" "build/dist/n84-$VERSION.zip" --clobber
           else
             gh release create "$VERSION" "build/dist/n84-$VERSION.zip" \
-              --title "N84 $VERSION" --prerelease --generate-notes
+              --title "N84 $VERSION" --latest --generate-notes
           fi
