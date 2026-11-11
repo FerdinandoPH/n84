@@ -149,13 +149,13 @@ static bool flush_flash(const machine_t *m, const char *rom_path) {
     return ok;
 }
 
-/* small "NN fps  NNN%" box in the top-right corner */
-static void draw_fps(uint16_t *fb, unsigned fps, unsigned speed) {
-    (void)fb;
+/* small "NN fps  NNN%" box in the top-right corner of the back buffer */
+static int fps_box_h(void) { return ui_line_height() + 2; }
+static void draw_fps(unsigned fps, unsigned speed) {
     char s[24];
     snprintf(s, sizeof s, "%u fps %u%%", fps, speed);
     int w = ui_text_width(s) + 6;
-    ui_rect(UI_W - w, 0, w, ui_line_height() + 2, UI_RGB(0, 0, 0));
+    ui_rect(UI_W - w, 0, w, fps_box_h(), UI_RGB(0, 0, 0));
     ui_text(UI_W - w + 3, 1, s, speed >= 95 ? UI_FG : UI_ACCENT);
 }
 
@@ -343,6 +343,9 @@ session_result_t session_run(const char *rom_path) {
     if (!machine_open(rom_path, &m, state_path, sizeof state_path)) return SESSION_ERROR;
 
     uint16_t *fb = plat_video_buffer();
+    /* the TI-84 Plus/SE view draws borders once and only updates the LCD
+     * area, so it keeps using the back buffer */
+    uint16_t *screen = m.draw == ce_draw_fb ? plat_video_screen() : NULL;
     ui_clear(UI_RGB(0, 0, 0));
     if (m.draw == ti8x_draw_fb) ti8x_view_init(fb);
     bool turbo = false;
@@ -367,8 +370,10 @@ session_result_t session_run(const char *rom_path) {
     while (act == ACT_RESUME) {
         plat_input_poll();
         if (plat_key_down(PK_QUESEXCL) || (plat_key_down(PK_CTRL) && plat_key_down(PK_ESC))) {
+            if (screen) m.draw(fb);    /* the menu's backdrop is the back buffer */
             act = ingame_menu(&m, state_path, &turbo);
             if (act != ACT_RESUME) break;
+            if (screen) screen = plat_video_screen();   /* OS dialogs re-init the LCD */
             ui_clear(UI_RGB(0, 0, 0));
             if (m.draw == ti8x_draw_fb) ti8x_view_init(fb);
             ui_wait_release();
@@ -399,10 +404,25 @@ session_result_t session_run(const char *rom_path) {
         }
         skipped = draw ? 0 : skipped + 1;
         if (draw) {
-            m.draw(fb);
             stat_drawn++;
-            if (config.show_fps) draw_fps(fb, fps, speed);
-            plat_video_present();
+            if (screen) {
+                /* CE frames are converted straight into the shown memory:
+                 * saves the lcd_blit copy (~3 ms). The rows under the speed
+                 * box are composed in the back buffer first so that the box
+                 * does not flicker. */
+                unsigned top = 0;
+                if (config.show_fps) {
+                    top = (unsigned)fps_box_h();
+                    ce_lcd_render_rows(fb, 0, top);
+                    draw_fps(fps, speed);
+                    memcpy(screen, fb, top * UI_W * sizeof *fb);
+                }
+                ce_lcd_render_rows(screen, top, CE_LCD_H);
+            } else {
+                m.draw(fb);
+                if (config.show_fps) draw_fps(fps, speed);
+                plat_video_present();
+            }
         }
         uint32_t now = plat_ticks();
         if (now - stat_t >= PLAT_TICKS_PER_SEC) {

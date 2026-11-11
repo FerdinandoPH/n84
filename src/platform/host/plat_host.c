@@ -127,6 +127,7 @@ bool plat_video_init(void) { memset(fb, 0, sizeof fb); return true; }
 uint16_t *plat_video_buffer(void) { return fb; }
 void plat_video_present(void) { memcpy(shown, fb, sizeof fb); frames_presented++; }
 void plat_video_shutdown(void) {}
+uint16_t *plat_video_screen(void) { return NULL; }
 unsigned plat_host_frames(void) { return frames_presented; }
 
 void plat_host_set_key(plat_key_t k, bool down) { if (k > 0 && k < PK_COUNT) keys[k] = down; }

@@ -30,6 +30,8 @@ void ce_release_all_keys(void);
 /* Current frame as RGB565 (320x240). Returns false (and draws black) when
  * the LCD controller is disabled. */
 bool ce_lcd_render(uint16_t *out);
+/* Same, only rows [y0, y1); `out` is still the top-left of the frame. */
+bool ce_lcd_render_rows(uint16_t *out, unsigned y0, unsigned y1);
 
 /* Number of LCD frames started since reset (for frame pacing / skipping). */
 uint32_t ce_lcd_frames(void);

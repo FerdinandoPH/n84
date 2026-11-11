@@ -79,6 +79,15 @@ void plat_video_present(void) {
     if (lcd_ready) lcd_blit(fb, SCR_320x240_565);
 }
 
+/* Where lcd_blit(SCR_320x240_565) copies to when it is a plain memcpy (CX,
+ * CX II: on the CX II this is the 150 KB frame SRAM at 0xA8000000, the only
+ * memory the LCD controller reads correctly). Not on HW-W, where lcd_blit
+ * rotates, nor on the grayscale models. */
+uint16_t *plat_video_screen(void) {
+    if (!lcd_ready || !has_colors || lcd_type() != SCR_320x240_565) return NULL;
+    return (uint16_t *)REAL_SCREEN_BASE_ADDRESS;
+}
+
 void plat_video_shutdown(void) {
     if (lcd_ready) lcd_init(SCR_TYPE_INVALID);
     lcd_ready = false;

@@ -462,17 +462,25 @@ static inline uint32_t swap_rb565(uint32_t c) {   /* swap the 5-bit R and B fiel
     return (c & 0x07E0) | (c >> 11 & 0x1F) | (c << 11 & 0xF800);
 }
 
-bool ce_lcd_render(uint16_t *out) {
-    uint16_t *o = out, *end = out + CE_LCD_W * CE_LCD_H;
+bool ce_lcd_render(uint16_t *out) { return ce_lcd_render_rows(out, 0, CE_LCD_H); }
+
+bool ce_lcd_render_rows(uint16_t *out, unsigned y0, unsigned y1) {
+    if (y1 > CE_LCD_H) y1 = CE_LCD_H;
+    if (y0 >= y1) return true;
+    uint16_t *o = out + y0 * CE_LCD_W, *end = out + y1 * CE_LCD_W;
     uint32_t ctrl = lcd.control;
     if (!(ctrl & 1 << 11) || !lcd.data || lcd.data >= lcd.data_end) {
-        memset(out, 0, CE_LCD_W * CE_LCD_H * sizeof *out);
+        memset(o, 0, (size_t)(end - o) * sizeof *out);
         return false;
     }
     bool swap = !(ctrl & 1 << 8);           /* CEmu swaps R/B when BGR is clear */
     bool bebo = ctrl & 1 << 9;
     unsigned mode = ctrl >> 1 & 7;
-    const uint8_t *d = (const uint8_t *)lcd.data, *dend = (const uint8_t *)lcd.data_end;
+    /* source words per row: 1/2/4/8 bpp, 16 bpp (modes 4, 6, 7), 24 bpp in 32 */
+    size_t row_words = mode < 4 ? (CE_LCD_W << mode) / 32 : mode == 5 ? CE_LCD_W : CE_LCD_W / 2;
+    const uint32_t *src = lcd.data + y0 * row_words;
+    if (src >= lcd.data_end) { memset(o, 0, (size_t)(end - o) * sizeof *out); return true; }
+    const uint8_t *d = (const uint8_t *)src, *dend = (const uint8_t *)lcd.data_end;
 
     if (mode == 6 && !bebo) {                /* 16 bpp 5:6:5, the usual case */
         const uint16_t *s = (const uint16_t *)d;
@@ -483,8 +491,8 @@ bool ce_lcd_render(uint16_t *out) {
         o += n;
     } else if (mode == 3 && !bebo) {         /* 8 bpp palette (GRAPHX): pixels in byte order */
         const uint16_t *pal = lcd.palettes[swap ? 1 : 0];
-        const uint32_t *w = lcd.data;
-        size_t words = (size_t)(lcd.data_end - lcd.data);
+        const uint32_t *w = src;
+        size_t words = (size_t)(lcd.data_end - src);
         size_t n = (size_t)(end - o) / 4;
         if (words < n) n = words;
         uint32_t *o32 = (uint32_t *)o;       /* out is 4-byte aligned, as is each row of 4 */
@@ -499,7 +507,7 @@ bool ce_lcd_render(uint16_t *out) {
         unsigned bpp = 1u << mode, mask = (1u << bpp) - 1;
         unsigned bi = bebo ? 0 : 24;
         if (!(ctrl & 1 << 10)) bi ^= 8 - bpp;
-        const uint32_t *w = lcd.data;
+        const uint32_t *w = src;
         while (w < lcd.data_end && o < end) {
             uint32_t word = *w++;
             unsigned bitpos = 32;
@@ -509,7 +517,7 @@ bool ce_lcd_render(uint16_t *out) {
             } while (bitpos && o < end);
         }
     } else {                                 /* 1555, 888, 565 big-endian, 444 */
-        const uint32_t *w = lcd.data;
+        const uint32_t *w = src;
         while (w < lcd.data_end && o < end) {
             uint32_t word = *w++, c0, c1;
             if (mode == 5) {                 /* 24 bpp: one pixel per word */

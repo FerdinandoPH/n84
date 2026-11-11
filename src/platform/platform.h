@@ -44,6 +44,9 @@ bool      plat_video_init(void);
 uint16_t *plat_video_buffer(void);
 void      plat_video_present(void);
 void      plat_video_shutdown(void);
+/* Memory the display shows, writable as a 320x240 RGB565 frame (no present
+ * needed), or NULL when frames must go through the back buffer. */
+uint16_t *plat_video_screen(void);
 
 /* Input: plat_input_poll() latches the state read by plat_key_down() */
 void     plat_input_poll(void);
