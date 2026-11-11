@@ -2,7 +2,7 @@
  * N84 - TI-8x emulator for the TI-Nspire
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * TI-83 Plus SE / TI-84 Plus / TI-84 Plus SE machine (Z80 family).
+ * TI-83 Plus / TI-83 Plus SE / TI-84 Plus / TI-84 Plus SE machine (Z80 family).
  *
  * Hardware behaviour is based on WikiTI documentation and on TilEm
  * (LGPL-2.1+, Benjamin Moody et al.), which was used as a reference.
@@ -32,6 +32,8 @@ typedef enum {
     TI8X_MODEL_83PSE,
     TI8X_MODEL_84P,
     TI8X_MODEL_84PSE,
+    TI8X_MODEL_83P,             /* after the others: saved states store the number */
+    TI8X_MODEL_COUNT
 } ti8x_model_t;
 
 /* TI key codes: (group << 3) | bit, matching port 01 scanning */
@@ -123,6 +125,8 @@ ti8x_model_t ti8x_detect_model(const uint8_t *rom, size_t size);
 /* Same, from the image size and its last (boot) 16 KiB page only. */
 ti8x_model_t ti8x_detect_model_boot(size_t size, const uint8_t *boot_page);
 const char  *ti8x_model_name(ti8x_model_t m);
+/* Offset of the boot page (the last 16 KiB of Flash) in an image of `size`. */
+size_t       ti8x_boot_page_offset(size_t size);
 
 /* Takes ownership of nothing: the ROM is copied. Returns false on bad size. */
 bool  ti8x_init(ti8x_t *m, ti8x_model_t model, const uint8_t *rom, size_t size);

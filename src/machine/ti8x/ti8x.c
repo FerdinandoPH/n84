@@ -2,7 +2,10 @@
  * N84 - TI-8x emulator for the TI-Nspire
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * TI-83 Plus SE / TI-84 Plus / TI-84 Plus SE hardware.
+ * TI-83 Plus / TI-83 Plus SE / TI-84 Plus / TI-84 Plus SE hardware.
+ * The TI-83 Plus ("BE") is the older ASIC: 512 KiB Flash, 32 KiB RAM, 6 MHz
+ * only, RAM selected by bit 6 of ports 6/7, no port 5, no crystal timers,
+ * RTC, MD5 or USB, and port numbers decoded with mask 17h (mirrors).
  * Reference: WikiTI port documentation and TilEm (LGPL) emu/x4, emu/xz.
  */
 #include <stdlib.h>
@@ -28,6 +31,7 @@ static const model_info_t models[] = {
     [TI8X_MODEL_83PSE] = { 0x80, 8, 0xC1, 0x33, 0x69, 2, false },
     [TI8X_MODEL_84P]   = { 0x40, 8, 0xE1, 0x45, 0x29, 1, true  },
     [TI8X_MODEL_84PSE] = { 0x80, 8, 0xE1, 0x45, 0x69, 2, true  },
+    [TI8X_MODEL_83P]   = { 0x20, 2, 0x01, 0x00, 0x00, 1, false },
 };
 
 static const char *const model_names[] = {
@@ -35,6 +39,7 @@ static const char *const model_names[] = {
     [TI8X_MODEL_83PSE] = "TI-83 Plus SE",
     [TI8X_MODEL_84P] = "TI-84 Plus",
     [TI8X_MODEL_84PSE] = "TI-84 Plus SE",
+    [TI8X_MODEL_83P] = "TI-83 Plus",
 };
 
 const char *ti8x_model_name(ti8x_model_t m) {
@@ -49,6 +54,7 @@ static bool find_bytes(const uint8_t *buf, size_t len, const char *s, size_t sle
 }
 
 ti8x_model_t ti8x_detect_model_boot(size_t size, const uint8_t *boot_page) {
+    if (size >= 0x80000 && size < 0xA4000) return TI8X_MODEL_83P;
     if (size >= 0x100000 && size < 0x124000) return TI8X_MODEL_84P;
     if (size >= 0x200000 && size < 0x224000) {
         /* Same test as TilEm: the 84+SE boot sector mentions "Operating".
@@ -61,14 +67,19 @@ ti8x_model_t ti8x_detect_model_boot(size_t size, const uint8_t *boot_page) {
 }
 
 ti8x_model_t ti8x_detect_model(const uint8_t *rom, size_t size) {
-    if (size < 0x100000) return TI8X_MODEL_NONE;
-    return ti8x_detect_model_boot(size, rom + (size >= 0x200000 ? 0x1FC000 : 0xFC000));
+    if (size < 0x80000) return TI8X_MODEL_NONE;
+    return ti8x_detect_model_boot(size, rom + ti8x_boot_page_offset(size));
 }
 
 static inline const model_info_t *info(const ti8x_t *m) { return &models[m->model]; }
 static inline unsigned cert_page(const ti8x_t *m) { return m->flash_pages - 2; }
 static inline unsigned boot_page(const ti8x_t *m) { return m->flash_pages - 1; }
 static inline void update_irq(ti8x_t *m) { m->cpu.irq_line = m->int_pending != 0; }
+static inline bool is_83p(const ti8x_t *m) { return m->model == TI8X_MODEL_83P; }
+
+size_t ti8x_boot_page_offset(size_t size) {
+    return size >= 0x200000 ? 0x1FC000 : size >= 0x100000 ? 0xFC000 : 0x7C000;
+}
 
 /* ======================================================================
  * Memory mapping
@@ -97,13 +108,14 @@ static void map_bank(ti8x_t *m, unsigned bank, unsigned page) {
 }
 
 static unsigned decode_ab(const ti8x_t *m, uint8_t v) {
+    if (is_83p(m)) return (v & 0x40) ? m->flash_pages + (v & 1) : v & 0x1Fu;
     if (v & 0x80) return m->flash_pages + (v & (m->ram_pages - 1));
     return v & (m->flash_pages - 1);
 }
 
 static void update_mapping(ti8x_t *m) {
     unsigned a = decode_ab(m, m->port6), b = decode_ab(m, m->port7);
-    unsigned c = m->flash_pages + (m->port5 & (m->ram_pages - 1));
+    unsigned c = m->flash_pages + (is_83p(m) ? 0 : m->port5 & (m->ram_pages - 1));
     map_bank(m, 0, 0);
     if (m->port4 & 1) {
         map_bank(m, 1, a & ~1u);
@@ -143,7 +155,7 @@ static void sector_of(const ti8x_t *m, uint32_t pa, uint32_t *start, uint32_t *s
 static bool sector_writable(const ti8x_t *m, uint32_t start) {
     uint32_t end = m->flash_pages * PAGE_SIZE;
     unsigned group = 0;
-    if (start == end - 0x50000 || start == end - 0x4000) group = info(m)->protect_group;
+    if ((start == end - 0x50000 && !is_83p(m)) || start == end - 0x4000) group = info(m)->protect_group;
     return !(group & ~m->flash_override);
 }
 
@@ -250,10 +262,12 @@ static void set_flash_unlock(ti8x_t *m, bool u) {
  * Timers
  * ==================================================================== */
 
-static const uint16_t hw_timer_us[4] = { 1953, 4395, 6836, 9277 };
+/* hardware timer periods: 512/227.5/146.3/107.8 Hz (SE and 84 Plus),
+ * 560/248/170/118 Hz (TI-83 Plus) */
+static const uint16_t hw_timer_us[2][4] = { { 1953, 4395, 6836, 9277 }, { 1786, 4032, 5882, 8475 } };
 
 static uint64_t hw_period(const ti8x_t *m) {
-    return (uint64_t)hw_timer_us[(m->port4 >> 1) & 3] * TI8X_TICKS_PER_US;
+    return (uint64_t)hw_timer_us[is_83p(m)][(m->port4 >> 1) & 3] * TI8X_TICKS_PER_US;
 }
 
 static uint64_t crys_duration(const ti8x_t *m, uint8_t f, unsigned n) {
@@ -462,9 +476,19 @@ static uint8_t read_keys(const ti8x_t *m) {
     return (uint8_t)~keys;
 }
 
+/* TI-83 Plus: ports 00-07 and 10-14 only, mirrored through the whole range */
+static uint8_t port83p(uint16_t port) {
+    uint8_t p = port & 0x17;
+    return p == 0x05 || p > 0x14 ? 0xFF : p;     /* FF: no such port */
+}
+
 static uint8_t port_in(void *ctx, uint16_t port) {
     ti8x_t *m = ctx;
     uint8_t v;
+    if (is_83p(m)) {
+        port = port83p(port);
+        if (port == 0xFF) return 0xFF;
+    }
     switch (port & 0xFF) {
     case 0x00: return (uint8_t)((~m->linkout & 3) | (m->linkout << 4));
     case 0x01: return read_keys(m);
@@ -531,6 +555,7 @@ static uint8_t port_in(void *ctx, uint16_t port) {
 
 static void port_out(void *ctx, uint16_t port, uint8_t v) {
     ti8x_t *m = ctx;
+    if (is_83p(m) && (port = port83p(port)) == 0xFF) return;
     switch (port & 0xFF) {
     case 0x00: m->linkout = v & 3; break;
     case 0x01: m->keygroup = v; break;
@@ -619,7 +644,7 @@ static void port_out(void *ctx, uint16_t port, uint8_t v) {
 
 bool ti8x_init(ti8x_t *m, ti8x_model_t model, const uint8_t *rom, size_t size) {
     memset(m, 0, sizeof *m);
-    if (model <= TI8X_MODEL_NONE || model > TI8X_MODEL_84PSE) return false;
+    if (model <= TI8X_MODEL_NONE || model >= TI8X_MODEL_COUNT) return false;
     m->model = model;
     m->flash_pages = models[model].flash_pages;
     m->ram_pages = models[model].ram_pages;

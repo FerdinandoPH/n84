@@ -57,14 +57,15 @@ static void probe_rom(rom_entry_t *r) {
         strcpy(r->model_short, "CE");
         if (read_at(f, 0, boot, sizeof boot) && bootver_parse(boot, &bv))
             snprintf(r->boot, sizeof r->boot, "%u.%u.%u.%04u", bv.major, bv.minor, bv.revision, bv.build);
-    } else if (r->size >= 0x100000) {
+    } else if (r->size >= 0x80000) {
         static uint8_t page[0x4000];
-        long off = r->size >= 0x200000 ? 0x1FC000 : 0xFC000;
+        long off = (long)ti8x_boot_page_offset((size_t)r->size);
         if (read_at(f, off, page, sizeof page)) {
             ti8x_model_t m = ti8x_detect_model_boot((size_t)r->size, page);
             if (m != TI8X_MODEL_NONE) {
                 snprintf(r->model, sizeof r->model, "%s", ti8x_model_name(m));
-                strcpy(r->model_short, m == TI8X_MODEL_84P ? "84+" : m == TI8X_MODEL_84PSE ? "84+SE" : "83+SE");
+                strcpy(r->model_short, m == TI8X_MODEL_84P ? "84+" : m == TI8X_MODEL_84PSE ? "84+SE" :
+                       m == TI8X_MODEL_83P ? "83+" : "83+SE");
             }
             for (unsigned i = 0; i + 8 < sizeof page; i++)
                 if (!memcmp(page + i, "BootFree", 8)) { strcpy(r->boot, "BootFree"); break; }

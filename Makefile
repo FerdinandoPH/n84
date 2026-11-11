@@ -91,7 +91,7 @@ test-full: test
 	@! grep -q "ERROR" $(BUILD)/zexall.log
 
 rom-smoke: $(HB)/n84-host $(HB)/n84ce-host $(HB)/n84-ui
-	tools/rom_smoke.sh $(ROM)
+	tools/rom_smoke.sh $(ROM) $(CEROM)
 	tests/ui/smoke.sh
 
 nspire:

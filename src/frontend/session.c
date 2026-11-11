@@ -40,7 +40,7 @@ typedef struct {
     const char *(*send_var)(const tivar_t *v, bool *archived);
 } machine_t;
 
-/* --- TI-83 Plus SE / TI-84 Plus / TI-84 Plus SE --- */
+/* --- TI-83 Plus / TI-83 Plus SE / TI-84 Plus / TI-84 Plus SE --- */
 
 static ti8x_t ti8x;
 
@@ -303,7 +303,7 @@ static bool machine_open(const char *rom_path, machine_t *mp, char *state_path, 
         ti8x_model_t model = ti8x_detect_model(rom, rom_size);
         bool ok = model != TI8X_MODEL_NONE && ti8x_init(&ti8x, model, rom, rom_size);
         free(rom);
-        if (!ok) { ui_message("Error", "Unsupported ROM image (expected a TI-83 Plus SE, TI-84 Plus, TI-84 Plus SE or TI-84 Plus CE dump), or out of memory.", NULL); return false; }
+        if (!ok) { ui_message("Error", "Unsupported ROM image (expected a TI-83 Plus, TI-83 Plus SE, TI-84 Plus, TI-84 Plus SE or TI-84 Plus CE dump), or out of memory.", NULL); return false; }
         m.name = ti8x_model_name(model);
     }
     session_state_path(rom_path, state_path, sp_size);

@@ -9,6 +9,7 @@ trap 'rm -rf "$D"' EXIT
 [ -f roms/ti84ce.rom ] || { echo "no CE ROM, skipping"; exit 0; }
 cp roms/ti84ce.rom "$D/CE.rom.tns"
 [ -f roms/ti84se.rom ] && cp roms/ti84se.rom "$D/SE.rom.tns"
+[ -f roms/ti83plus.rom ] && cp roms/ti83plus.rom "$D/TI83P.rom.tns"
 {
     echo "wait 10"; echo "shot $D/shots/launcher.ppm"
     echo "tap ENTER"; echo "wait 20"; echo "shot $D/shots/welcome.ppm"     # first run: menu hint
