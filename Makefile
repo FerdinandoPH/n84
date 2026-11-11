@@ -3,6 +3,7 @@
 #   make test      run host test suites (ZEXDOC, ti8x machine test)
 #   make test-full also run ZEXALL (~40 s)
 #   make nspire    build the Ndless .tns files (requires the Ndless SDK in PATH)
+#   make dist      release zip in build/dist/ (builds nspire first)
 #   make clean
 
 HOST_CC     ?= gcc
@@ -22,7 +23,7 @@ VIEW_TI8X := src/frontend/ti8x_view.c
 CE_SRC    := $(wildcard src/machine/ce/*.c)
 HDRS      := $(wildcard src/*/*.h src/*/*/*.h src/*/*/*/*.h src/*/*/*.inc)
 
-.PHONY: all host test test-full rom-smoke nspire clean
+.PHONY: all host test test-full rom-smoke nspire dist clean
 
 all: host
 
@@ -97,6 +98,16 @@ rom-smoke: $(HB)/n84-host $(HB)/n84ce-host $(HB)/n84-ui
 nspire:
 	$(MAKE) -f Makefile.nspire VERSION=$(VERSION)
 
+# What users download: the program, the benchmark, the default key file, docs
+DIST := n84-$(VERSION)
+dist: nspire
+	rm -rf $(BUILD)/dist/$(DIST) $(BUILD)/dist/$(DIST).zip
+	mkdir -p $(BUILD)/dist/$(DIST)/docs
+	cp $(BUILD)/nspire/n84.tns $(BUILD)/nspire/n84bench.tns dist/n84.keys.tns \
+	   README.md README.es.md LICENSE $(BUILD)/dist/$(DIST)/
+	cp docs/*.png docs/*.gif $(BUILD)/dist/$(DIST)/docs/
+	cd $(BUILD)/dist && python3 -m zipfile -c $(DIST).zip $(DIST)
+	@echo "$(BUILD)/dist/$(DIST).zip"
 
 clean:
 	rm -rf $(BUILD)

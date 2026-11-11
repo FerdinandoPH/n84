@@ -1,0 +1,90 @@
+# Tests on every push and pull request; calculator build (uploaded as an
+# artifact); on a tag "v*", a GitHub release (pre-release) with the zip.
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # Ndless commit the SDK is built from; changing it rebuilds the toolchain
+  # cache (~40 min)
+  NDLESS_REF: c168cae22ce9fefa8e38d4f9e21d3bd4c4a1fe3d
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build PC tools
+        run: make -j"$(nproc)" host
+      - name: Tests
+        run: make test
+
+  nspire:
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write             # gh release create
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0           # git describe needs the tags
+
+      - name: Ndless sources
+        run: |
+          git clone --filter=blob:none https://github.com/ndless-nspire/Ndless.git "$RUNNER_TEMP/Ndless"
+          cd "$RUNNER_TEMP/Ndless"
+          git checkout "$NDLESS_REF"
+          git submodule update --init --recursive
+          echo "NDLESS=$RUNNER_TEMP/Ndless" >> "$GITHUB_ENV"
+
+      - name: Toolchain dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp-dev libmpfr-dev libmpc-dev zlib1g-dev python3-dev \
+            texinfo libboost-program-options-dev
+
+      - name: Toolchain cache
+        id: toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/Ndless/ndless-sdk/toolchain/install
+          key: ndless-toolchain-ubuntu-24.04-${{ env.NDLESS_REF }}
+
+      - name: Build toolchain
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        working-directory: ${{ env.NDLESS }}/ndless-sdk/toolchain
+        run: PARALLEL=-j"$(nproc)" ./build_toolchain.sh
+
+      - name: Build Ndless SDK
+        run: |
+          echo "$NDLESS/ndless-sdk/toolchain/install/bin" >> "$GITHUB_PATH"
+          echo "$NDLESS/ndless-sdk/bin" >> "$GITHUB_PATH"
+          export PATH="$NDLESS/ndless-sdk/toolchain/install/bin:$NDLESS/ndless-sdk/bin:$PATH"
+          make -C "$NDLESS/ndless-sdk" -j"$(nproc)"
+
+      - name: Version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then v="$GITHUB_REF_NAME"
+          else v="$(git describe --tags --always)"; fi
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Build N84
+        run: make dist VERSION="$VERSION"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: n84-${{ env.VERSION }}
+          path: build/dist/n84-${{ env.VERSION }}/
+
+      - name: Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$VERSION" "build/dist/n84-$VERSION.zip" \
+            --title "N84 $VERSION" --prerelease --generate-notes
