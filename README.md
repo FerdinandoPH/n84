@@ -183,7 +183,10 @@ Credits to the people behind:
 - The [Ndless SDK](https://github.com/ndless-nspire/Ndless), which the calculator build uses.
 - nspire-z80, the earlier TI-83/84 Plus emulator for the TI-Nspire.
 - [CEmu](https://github.com/CE-Programming/CEmu), which the TI-84 Plus CE peripherals are adapted
-  from (GPLv3; details in `src/machine/ce/README.md`).
+  from (GPLv3; details in `src/machine/ce/README.md`). N84's eZ80 core follows the instruction
+  behaviour of CEmu's CPU core.
+- [TilEm](https://lpg.ticalc.org/prj_tilem/) and [WikiTI](https://wikiti.brandonw.net), the
+  references for the TI-83 Plus / TI-84 Plus hardware.
 
 The UI font is Lat15-Fixed13 from the Linux console fonts. TI-84 Plus, TI-84 Plus CE, TI-83 Plus and
 TI-Nspire are trademarks of Texas Instruments. N84 is not affiliated with Texas Instruments.

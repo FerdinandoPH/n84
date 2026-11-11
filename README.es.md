@@ -168,7 +168,10 @@ Gracias a la gente que hay detrás de:
   de la calculadora.
 - nspire-z80, el emulador anterior de TI-83/84 Plus para la TI-Nspire.
 - [CEmu](https://github.com/CE-Programming/CEmu), del que están adaptados los periféricos de la
-  TI-84 Plus CE (GPLv3; detalles en `src/machine/ce/README.md`).
+  TI-84 Plus CE (GPLv3; detalles en `src/machine/ce/README.md`). El núcleo eZ80 de N84 sigue el
+  comportamiento de las instrucciones del núcleo de CPU de CEmu.
+- [TilEm](https://lpg.ticalc.org/prj_tilem/) y [WikiTI](https://wikiti.brandonw.net), las
+  referencias para el hardware de la TI-83 Plus / TI-84 Plus.
 
 TI-84 Plus, TI-84 Plus CE, TI-83 Plus y TI-Nspire son marcas de Texas Instruments. N84 no tiene
 relación con Texas Instruments.
