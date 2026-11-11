@@ -152,6 +152,10 @@ make dist              # zip de la versión en build/dist/
 Un `local.mk` opcional (no se sube al repositorio) puede definir `DEPLOY_DIR`. Cada `.tns`
 recompilado se copia ahí.
 
+En el zip de la versión, `benchmark/n84bench.tns` mide la velocidad de la calculadora y de los
+núcleos de CPU y escribe `n84bench.txt.tns`. No hace falta para usar N84, pero ese fichero ayuda
+si informas de un problema de velocidad.
+
 Las herramientas de PC, la estructura del código y los créditos están en el
 [README en inglés](README.md#pc-tools).
 

@@ -102,8 +102,9 @@ nspire:
 DIST := n84-$(VERSION)
 dist: nspire
 	rm -rf $(BUILD)/dist/$(DIST) $(BUILD)/dist/$(DIST).zip
-	mkdir -p $(BUILD)/dist/$(DIST)/docs
-	cp $(BUILD)/nspire/n84.tns $(BUILD)/nspire/n84bench.tns dist/n84.keys.tns \
+	mkdir -p $(BUILD)/dist/$(DIST)/docs $(BUILD)/dist/$(DIST)/benchmark
+	cp $(BUILD)/nspire/n84bench.tns $(BUILD)/dist/$(DIST)/benchmark/
+	cp $(BUILD)/nspire/n84.tns dist/n84.keys.tns \
 	   README.md README.es.md LICENSE $(BUILD)/dist/$(DIST)/
 	cp docs/*.png docs/*.gif $(BUILD)/dist/$(DIST)/docs/
 	cd $(BUILD)/dist && python3 -m zipfile -c $(DIST).zip $(DIST)

@@ -159,7 +159,7 @@ copied there.
 - `build/host/n84ce-host` is the same for the TI-84 Plus CE.
 - `build/host/n84-ui` runs the real calculator frontend with a script (see
   `src/platform/host/plat_host.c` and `tests/ui/smoke.sh`).
-- `n84bench.tns` (in the release zip) measures the platform and both CPU cores on the calculator
+- `n84bench.tns` (in the `benchmark` folder of the release zip) measures the platform and both CPU cores on the calculator
   and writes `n84bench.txt.tns`. It is useful when reporting performance problems.
 
 ### Layout
