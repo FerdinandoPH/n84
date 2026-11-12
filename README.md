@@ -32,7 +32,7 @@ so you get the best of both worlds. It runs the real TI-OS from a ROM image of y
 
 Step-by-step details are in [Installing](#installing) below.
 
-## Alpha status
+## Warnings
 
 This project is in an alpha state, so there are a few things you need to know:
 
@@ -176,7 +176,7 @@ copied there.
 
 ## License and credits
 
-N84 is made by [FerdinandoPH](https://github.com/FerdinandoPH) and is free software under the [GNU GPL v3](LICENSE) or later.
+N84 is made by [FerdinandoPH](https://github.com/FerdinandoPH) with the help of AI, and is free software under the [GNU GPL v3](LICENSE) or later.
 
 Credits to the people behind:
 
