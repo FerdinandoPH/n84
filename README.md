@@ -38,7 +38,7 @@ This project is in an alpha state, so there are a few things you need to know:
 
 - **Performance:** I used my TI-Nspire CX II. The TI-83/84 Plus runs at full speed, but the
   TI-84 Plus CE can lag a bit, especially with demanding programs. I expect it to be worse on older
-  Nspire models (the TI-Nspire CX, not II, has not been tested).
+  Nspire models (the TI-Nspire CX I has not been tested).
 - **Compatibility:** I only have legal access to three particular ROMs, so I'm not sure whether ROMs
   with other OS versions work. Likewise, not every program may run correctly. If you find a
   problem, please [open an issue](../../issues), and include what you did, which ROM model and OS version
