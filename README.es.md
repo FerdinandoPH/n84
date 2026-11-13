@@ -38,7 +38,7 @@ El proyecto está en fase alfa, así que conviene saber algunas cosas:
 
 - **Rendimiento:** lo he probado en mi TI-Nspire CX II. La TI-83/84 Plus va a velocidad completa,
   pero la TI-84 Plus CE puede ir algo lenta, sobre todo con programas exigentes. Supongo que en
-  modelos de Nspire más antiguos irá peor (no se ha probado en la TI-Nspire CX, no II).
+  modelos de Nspire más antiguos irá peor (no se ha probado en la TI-Nspire CX I).
 - **Compatibilidad:** solo tengo acceso legal a tres ROMs concretas, así que no sé si funcionan las
   ROMs con otras versiones del OS. Tampoco es seguro que todos los programas funcionen bien. Si
   encuentras un problema, [abre una incidencia](../../issues): cuenta qué hiciste, qué modelo de
